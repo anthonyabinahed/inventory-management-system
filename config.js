@@ -1,7 +1,7 @@
 const config = {
-  appName: "Inventory Management System",
+  appName: "Stock Management",
   appDescription:
-    "Inventory management system for a laboratory.",
+    "Laboratry reageant system",
   domainName: "shipfa.st", // TODO: change
   resend: {
     fromNoReply: `Anamed <noreply@anamed.ch>`,
