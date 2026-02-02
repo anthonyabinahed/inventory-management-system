@@ -34,7 +34,7 @@ export async function POST(req) {
   // Disable realtime to reduce Edge Runtime warnings
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_DEFAULT_KEY,
     {
       auth: { persistSession: false },
       realtime: { disabled: true }
