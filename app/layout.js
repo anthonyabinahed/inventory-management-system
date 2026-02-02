@@ -20,7 +20,6 @@ export default function RootLayout({ children }) {
 			className={font.className}
 		>
 			<body>
-				{/* ClientLayout contains all the client wrappers (Crisp chat support, toast messages, tooltips, etc.) */}
 				<ClientLayout>{children}</ClientLayout>
 			</body>
 		</html>
