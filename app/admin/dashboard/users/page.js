@@ -11,6 +11,10 @@ export default function UsersManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
 
+  // Row-level loading states
+  const [updatingRoles, setUpdatingRoles] = useState(new Set());
+  const [revokingUsers, setRevokingUsers] = useState(new Set());
+
   // Invite modal state
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -73,6 +77,9 @@ export default function UsersManagement() {
       return;
     }
 
+    // Add to revoking set for loading state
+    setRevokingUsers(prev => new Set(prev).add(userId));
+
     try {
       const { success, errorMessage } = await revokeUser(userId);
 
@@ -82,16 +89,31 @@ export default function UsersManagement() {
       loadData();
     } catch (error) {
       toast.error(error.message || "Failed to revoke access");
+    } finally {
+      setRevokingUsers(prev => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
     }
   };
 
   const handleUpdateRole = async (userId, newRole) => {
+    // Add to updating set for loading state
+    setUpdatingRoles(prev => new Set(prev).add(userId));
+
     try {
       await updateUserRole(userId, newRole);
       toast.success("Role updated successfully");
       loadData();
     } catch (error) {
       toast.error("Failed to update role");
+    } finally {
+      setUpdatingRoles(prev => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
     }
   };
 
@@ -157,17 +179,24 @@ export default function UsersManagement() {
                       </div>
                     </td>
                     <td>
-                      <select
-                        className="select select-sm select-bordered"
-                        value={user.role}
-                        onChange={(e) =>
-                          handleUpdateRole(user.id, e.target.value)
-                        }
-                        disabled={user.id === currentUserId}
-                      >
-                        <option value="user">User</option>
-                        <option value="admin">Admin</option>
-                      </select>
+                      <div className="relative inline-block">
+                        <select
+                          className={`select select-sm select-bordered transition-opacity ${
+                            updatingRoles.has(user.id) ? 'opacity-50' : ''
+                          }`}
+                          value={user.role}
+                          onChange={(e) =>
+                            handleUpdateRole(user.id, e.target.value)
+                          }
+                          disabled={user.id === currentUserId || updatingRoles.has(user.id)}
+                        >
+                          <option value="user">User</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                        {updatingRoles.has(user.id) && (
+                          <span className="loading loading-spinner loading-xs absolute right-8 top-1/2 -translate-y-1/2"></span>
+                        )}
+                      </div>
                     </td>
                     <td className="whitespace-nowrap">
                       {new Date(user.created_at).toLocaleDateString()}
@@ -181,7 +210,11 @@ export default function UsersManagement() {
                           onClick={() =>
                             handleRevokeAccess(user.id, user.email)
                           }
+                          disabled={revokingUsers.has(user.id)}
                         >
+                          {revokingUsers.has(user.id) && (
+                            <span className="loading loading-spinner loading-xs"></span>
+                          )}
                           Revoke Access
                         </button>
                       )}
