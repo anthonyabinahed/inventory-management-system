@@ -1,106 +1,79 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import toast from "react-hot-toast";
-import config from "@/config";
-import { login } from "@/actions/auth";
+import { Construction, Wrench, HardHat, Cog } from "lucide-react";
 
-export default function LogIn() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleLogIn = async (e) => {
-    e.preventDefault();
-    setIsLoading(true);
-
-    try {
-      const formData = new FormData(e.target);
-      const { errorMessage, isAdmin } = await login(formData);
-
-      if (errorMessage) {
-        toast.error(errorMessage);
-        return;
-      }
-
-      toast.success("Welcome back");
-
-      if (isAdmin) {
-        router.push(config.routes.admin.dashboard.users);
-      } else {
-        router.push(config.routes.home);
-      }
-    } catch (error) {
-      toast.error(error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+export default function UnderConstruction() {
   return (
-    <main
-      className="min-h-screen flex items-center justify-center p-8"
-      data-theme={config.colors.theme}
-    >
-      <div className="w-full max-w-md">
-        <form onSubmit={handleLogIn} className="space-y-4">
-          <div className="form-control">
-            <label className="label">
-              <span className="label-text">Email</span>
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="input input-bordered w-full"
-              placeholder="you@company.com"
-              required
-              autoComplete="email"
-            />
+    <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-base-300 via-base-200 to-base-300 p-8">
+      <div className="text-center max-w-lg">
+        {/* Animated icons */}
+        <div className="relative flex justify-center items-center mb-8">
+          {/* Spinning cog - left */}
+          <div className="absolute -left-4 top-0 animate-spin-slow">
+            <Cog className="w-12 h-12 text-warning opacity-60" />
           </div>
 
-          <div className="form-control">
-            <label className="label">
-              <span className="label-text">Password</span>
-            </label>
-            <input
-              type="password"
-              name="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input input-bordered w-full"
-              placeholder="Enter your password"
-              required
-              autoComplete="current-password"
-            />
+          {/* Main construction icon */}
+          <div className="relative z-10 bg-warning/20 p-6 rounded-full animate-pulse">
+            <Construction className="w-24 h-24 text-warning" />
           </div>
 
-          <button
-            type="submit"
-            className="btn btn-primary w-full"
-            disabled={isLoading}
-          >
-            {isLoading && (
-              <span className="loading loading-spinner loading-xs"></span>
-            )}
-            Sign In
-          </button>
-        </form>
-
-        <div className="text-center mt-6">
-          <Link href={config.routes.forgotPassword} className="link link-hover text-sm">
-            Forgot your password?
-          </Link>
+          {/* Spinning cog - right */}
+          <div className="absolute -right-4 top-0 animate-spin-slow-reverse">
+            <Cog className="w-12 h-12 text-warning opacity-60" />
+          </div>
         </div>
 
-        <div className="text-center mt-4 text-sm text-base-content/50">
-          Don't have an account? Contact your administrator.
+        {/* Title */}
+        <h1 className="text-4xl font-bold text-base-content mb-4">
+          Under Construction
+        </h1>
+
+        {/* Subtitle */}
+        <p className="text-lg text-base-content/70 mb-8">
+          We're building something amazing. Check back soon!
+        </p>
+
+        {/* Decorative tools */}
+        <div className="flex justify-center gap-6 mb-8">
+          <div className="tooltip" data-tip="Working hard">
+            <Wrench className="w-8 h-8 text-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+          </div>
+          <div className="tooltip" data-tip="Safety first">
+            <HardHat className="w-8 h-8 text-secondary animate-bounce" style={{ animationDelay: "150ms" }} />
+          </div>
+          <div className="tooltip" data-tip="Building">
+            <Construction className="w-8 h-8 text-accent animate-bounce" style={{ animationDelay: "300ms" }} />
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="w-full max-w-xs mx-auto">
+          <div className="flex justify-between text-sm text-base-content/60 mb-2">
+            <span>Progress</span>
+            <span>Loading...</span>
+          </div>
+          <progress className="progress progress-warning w-full" />
         </div>
       </div>
+
+      {/* Custom animations */}
+      <style jsx>{`
+        @keyframes spin-slow {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes spin-slow-reverse {
+          from { transform: rotate(360deg); }
+          to { transform: rotate(0deg); }
+        }
+        :global(.animate-spin-slow) {
+          animation: spin-slow 8s linear infinite;
+        }
+        :global(.animate-spin-slow-reverse) {
+          animation: spin-slow-reverse 8s linear infinite;
+        }
+      `}</style>
     </main>
   );
 }
