@@ -1,11 +1,10 @@
 const config = {
   appName: "Stock Management",
-  appDescription:
-    "Laboratry reageant system",
+  appDescription: "Laboratry reageant system",
   domainName: "shipfa.st", // TODO: change
   resend: {
-    fromNoReply: `Anamed <noreply@anamed.ch>`,
-    fromAdmin: `Sally Sleiman at Anamed <s.sleiman@anamed.ch>`,
+    fromNoReply: `Anamed <noreply@testing-anthony.xyz>`, // TODO: change
+    fromAdmin: `Sally Sleiman at Anamed <admin@testing-anthony.xyz>`, // TODO: change
     supportEmail: "anthonyabinahed@gmail.com",
   },
   colors: {
@@ -13,8 +12,28 @@ const config = {
     main: "#570df8",
   },
   auth: {
-    loginUrl: "/signin",
+    loginUrl: "/login",
     callbackUrl: "/dashboard",
+  },
+  routes: {
+    home: "/",
+    login: "/login",
+    forgotPassword: "/forgot-password",
+    resetPassword: "/reset-password",
+    acceptInvite: "/accept-invite",
+    // Prefixes for pattern matching in middleware
+    adminPrefix: "/admin",
+    apiPrefix: "/api",
+    admin: {
+      dashboard: {
+        users: "/admin/dashboard/users",
+      },
+    },
+    api: {
+      auth: {
+        callback: "/api/auth/callback",
+      }
+    },
   },
 };
 

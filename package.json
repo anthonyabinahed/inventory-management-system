@@ -1,12 +1,16 @@
 {
-  "name": "ship-fast-code",
+  "name": "stock-management",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "create-admin": "node scripts/create-first-admin.js",
+    "db:link:staging": "npx supabase link --project-ref xpejogsvvskpmvvfievz",
+    "db:link:prod": "npx supabase link --project-ref yzrbgdymgwlzrfhtmxyv",
+    "db:push": "npx supabase db push"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.0",
@@ -16,13 +20,13 @@
     "eslint": "^9.17.0",
     "eslint-config-next": "^15.1.3",
     "form-data": "^4.0.1",
-    "next": "^15.1.9",
+    "next": "^16.1.6",
     "nextjs-toploader": "^3.7.15",
-    "nodemailer": "^6.9.16",
+    "nodemailer": "^7.0.13",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-hot-toast": "^2.4.1",
-    "react-syntax-highlighter": "^15.6.1",
+    "react-syntax-highlighter": "^16.1.0",
     "react-tooltip": "^5.28.0",
     "resend": "^4.0.1"
   },

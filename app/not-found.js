@@ -1,5 +1,6 @@
 import Link from "next/link";
 import ButtonSupport from "@/components/ButtonSupport";
+import config from "@/config";
 
 // Simple 404 page with a button to go home and a button to contact support
 // Show a cute SVG with your primary color
@@ -100,7 +101,7 @@ export default function Custom404() {
       </p>
 
       <div className="flex flex-wrap gap-4 justify-center">
-        <Link href="/" className="btn btn-sm">
+        <Link href={config.routes.home} className="btn btn-sm">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox="0 0 20 20"
