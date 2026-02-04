@@ -1,17 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import config from "@/config";
-import { login } from "@/actions/auth";
+import { login, getCurrentUser } from "@/actions/auth";
 
 export default function LogIn() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const user = await getCurrentUser();
+      if (user) {
+        router.replace(config.routes.home);
+      } else {
+        setIsCheckingAuth(false);
+      }
+    };
+    checkAuth();
+  }, [router]);
 
   const handleLogIn = async (e) => {
     e.preventDefault();
@@ -26,11 +39,11 @@ export default function LogIn() {
         return;
       }
       if (isAdmin) {
-        router.push(config.routes.admin.dashboard.users);
+        router.replace(config.routes.admin.dashboard.users);
       } else {
-        router.push(config.routes.home);
+        router.replace(config.routes.home);
       }
-      
+
       toast.success("Welcome back");
     } catch (error) {
       toast.error(error.message);
@@ -38,6 +51,17 @@ export default function LogIn() {
       setIsLoading(false);
     }
   };
+
+  if (isCheckingAuth) {
+    return (
+      <main
+        className="min-h-screen flex items-center justify-center"
+        data-theme={config.colors.theme}
+      >
+        <span className="loading loading-spinner loading-lg"></span>
+      </main>
+    );
+  }
 
   return (
     <main
