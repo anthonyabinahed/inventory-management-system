@@ -11,10 +11,6 @@ const config = {
     theme: "light",
     main: "#570df8",
   },
-  auth: {
-    loginUrl: "/login",
-    callbackUrl: "/dashboard",
-  },
   routes: {
     home: "/",
     login: "/login",

@@ -20,7 +20,7 @@ apiClient.interceptors.response.use(
       // User not auth, ask to re login
       toast.error("Please login");
       // Sends the user to the login page
-      redirect(config.auth.loginUrl);
+      redirect(config.routes.login);
     } else if (error.response?.status === 403) {
       // User not authorized, must subscribe/purchase/pick a plan
       message = "Pick a plan to use this feature";
