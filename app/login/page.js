@@ -25,14 +25,13 @@ export default function LogIn() {
         toast.error(errorMessage);
         return;
       }
-
-      toast.success("Welcome back");
-
       if (isAdmin) {
         router.push(config.routes.admin.dashboard.users);
       } else {
         router.push(config.routes.home);
       }
+      
+      toast.success("Welcome back");
     } catch (error) {
       toast.error(error.message);
     } finally {

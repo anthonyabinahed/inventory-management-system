@@ -10,7 +10,6 @@ import config from "@/config";
  * Update a user's role
  */
 export async function updateUserRole(userId, newRole) {
-    // TODO: Check RLS if correct for this update
     const supabase = await createSupabaseClient();
     const { error } = await supabase
         .from("profiles")
