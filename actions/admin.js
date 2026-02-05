@@ -1,10 +1,12 @@
 'use server'
 
+import { cache } from "react";
 import { createSupabaseClient } from "@/libs/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/libs/resend";
 import { getErrorMessage } from "@/libs/utils";
 import config from "@/config";
+import { getCurrentUser } from "@/actions/auth";
 
 /**
  * Update a user's role
@@ -38,16 +40,16 @@ export async function getSupabaseAdmin() {
 }
 
 /**
- * Verifies the current user is an admin
+ * Verifies the current user is an admin (cached per request)
  */
-export async function verifyAdmin() {
-    const supabase = await createSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
+export const verifyAdmin = cache(async () => {
+    const user = await getCurrentUser();
 
     if (!user) {
         return { isAdmin: false, user: null, error: "Unauthorized" };
     }
 
+    const supabase = await createSupabaseClient();
     const { data: profile } = await supabase
         .from("profiles")
         .select("role")
@@ -59,7 +61,7 @@ export async function verifyAdmin() {
     }
 
     return { isAdmin: true, user, error: null };
-}
+});
 
 /**
  * Invite a new user (admin only)

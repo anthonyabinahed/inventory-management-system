@@ -1,5 +1,6 @@
 'use server'
 
+import { cache } from "react";
 import { createSupabaseClient } from "@/libs/supabase/server";
 import { getSupabaseAdmin } from "@/actions/admin";
 import { sendEmail } from "@/libs/resend";
@@ -8,13 +9,13 @@ import config from "@/config";
 
 
 /**
- * Get the currently authenticated user
+ * Get the currently authenticated user (cached per request)
  */
-export async function getCurrentUser() {
+export const getCurrentUser = cache(async () => {
     const supabase = await createSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
     return user;
-}
+});
 
 /**
  * Sign in with email and password

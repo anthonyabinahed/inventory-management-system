@@ -50,9 +50,13 @@ export default function AdminDashboard() {
         </div>
 
         {/* Tab Content */}
-        <div className="animate-opacity" key={activeTab}>
-          {activeTab === "users" && <UsersManagement />}
-          {activeTab === "analytics" && <Analytics />}
+        <div>
+          <div className={activeTab === "users" ? "animate-opacity" : "hidden"}>
+            <UsersManagement />
+          </div>
+          <div className={activeTab === "analytics" ? "animate-opacity" : "hidden"}>
+            <Analytics />
+          </div>
         </div>
       </div>
     </div>
