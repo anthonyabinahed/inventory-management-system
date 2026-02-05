@@ -154,7 +154,7 @@ export async function requestPasswordReset(email) {
                 </head>
                 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
                     <div style="text-align: center; margin-bottom: 30px;">
-                        <h1 style="color: #570df8; margin-bottom: 10px;">${config.appName}</h1>
+                        <h1 style="color: ${config.colors.main}; margin-bottom: 10px;">${config.appName}</h1>
                     </div>
 
                     <h2 style="color: #333;">Reset Your Password</h2>
@@ -167,7 +167,7 @@ export async function requestPasswordReset(email) {
 
                     <div style="text-align: center; margin: 30px 0;">
                         <a href="${resetUrl}"
-                           style="display: inline-block; padding: 14px 32px; background-color: #570df8; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                           style="display: inline-block; padding: 14px 32px; background-color: ${config.colors.main}; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
                             Reset Password
                         </a>
                     </div>
@@ -180,7 +180,7 @@ export async function requestPasswordReset(email) {
 
                     <p style="color: #999; font-size: 12px; text-align: center;">
                         If the button doesn't work, copy and paste this link into your browser:<br>
-                        <a href="${resetUrl}" style="color: #570df8; word-break: break-all;">${resetUrl}</a>
+                        <a href="${resetUrl}" style="color: ${config.colors.main}; word-break: break-all;">${resetUrl}</a>
                     </p>
                 </body>
                 </html>

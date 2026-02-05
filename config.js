@@ -1,5 +1,5 @@
 const config = {
-  appName: "Stock Management",
+  appName: "Anamed Stock Management",
   appDescription: "Laboratry reageant system",
   domainName: "shipfa.st", // TODO: change
   resend: {
@@ -9,7 +9,7 @@ const config = {
   },
   colors: {
     theme: "light",
-    main: "#570df8",
+    main: "#60baa9",
   },
   routes: {
     home: "/",

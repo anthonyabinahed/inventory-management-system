@@ -4,6 +4,9 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { signOut } from "@/actions/auth";
 import config from "@/config";
+import logo from "@/app/icon.png";
+import Image from "next/image";
+
 
 const Header = ({ user }) => {
   const pathname = usePathname();
@@ -23,9 +26,14 @@ const Header = ({ user }) => {
         <Link
           className="flex items-center gap-2 shrink-0"
           href="/"
-          title={`${config.appName} homepage`}
         >
-          <span className="font-extrabold text-lg">{config.appName}</span>
+          <Image
+                src={logo}
+                alt={`${config.appName} logo`}
+                priority={true}
+                width={250}
+                height={60}
+              />
         </Link>
 
         {user && !isLoginPage && (
