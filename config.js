@@ -21,9 +21,7 @@ const config = {
     adminPrefix: "/admin",
     apiPrefix: "/api",
     admin: {
-      dashboard: {
-        users: "/admin/dashboard/users",
-      },
+      dashboard: "/admin/dashboard"
     },
     api: {
       auth: {

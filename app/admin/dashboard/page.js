@@ -1,30 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { LayoutDashboard, Package, ScanLine } from "lucide-react";
-import { Overview } from "@/components/Overview";
-import { Inventory } from "@/components/Inventory";
-import { Scanner } from "@/components/Scanner";
+import { Users, BarChart3 } from "lucide-react";
+import UsersManagement from "@/components/UsersManagement";
+import { Analytics } from "@/components/Analytics";
 
 const tabs = [
   {
-    id: "overview",
-    title: "Overview",
-    icon: LayoutDashboard,
+    id: "users",
+    title: "Users",
+    icon: Users,
   },
   {
-    id: "inventory",
-    title: "Inventory",
-    icon: Package,
-  },
-  {
-    id: "scanner",
-    title: "Scanner",
-    icon: ScanLine,
+    id: "analytics",
+    title: "Analytics",
+    icon: BarChart3,
   },
 ];
 
-export default function Home() {
+
+export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState(tabs[0].id);
 
   return (
@@ -56,9 +51,8 @@ export default function Home() {
 
         {/* Tab Content */}
         <div className="animate-opacity" key={activeTab}>
-          {activeTab === "overview" && <Overview />}
-          {activeTab === "inventory" && <Inventory />}
-          {activeTab === "scanner" && <Scanner />}
+          {activeTab === "users" && <UsersManagement />}
+          {activeTab === "analytics" && <Analytics />}
         </div>
       </div>
     </div>

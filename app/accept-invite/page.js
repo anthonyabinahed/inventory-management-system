@@ -130,43 +130,39 @@ function AcceptInviteForm() {
 
   if (isVerifying) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <span className="loading loading-spinner loading-lg"></span>
-          <p className="mt-4 text-base-content/60">Verifying invitation...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-base-200">
+        <span className="loading loading-spinner loading-lg"></span>
       </div>
     );
   }
 
   if (error) {
     return (
-      <main className="min-h-screen flex items-center justify-center p-8">
-        <div className="text-center max-w-md">
-          <div className="text-error text-6xl mb-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-16 w-16 mx-auto"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
-            </svg>
+      <main className="min-h-screen flex items-center justify-center p-4 sm:p-8 bg-base-200">
+        <div className="card bg-base-100 shadow-xl w-full max-w-md">
+          <div className="card-body text-center">
+            <div className="text-error mb-4">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-12 w-12 mx-auto"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                />
+              </svg>
+            </div>
+            <h1 className="text-lg font-semibold mb-2">Invalid Invitation</h1>
+            <p className="text-base-content/60 text-sm mb-6">{error}</p>
+            <a href={config.routes.login} className="btn btn-primary btn-sm">
+              Go to Login
+            </a>
           </div>
-          <h1 className="text-2xl font-bold mb-2">Invalid Invitation</h1>
-          <p className="text-base-content/60 mb-6">{error}</p>
-          <p className="text-sm text-base-content/50 mb-6">
-            Please contact your administrator for a new invitation link.
-          </p>
-          <a href={config.routes.login} className="btn btn-primary">
-            Go to Login
-          </a>
         </div>
       </main>
     );
@@ -174,83 +170,64 @@ function AcceptInviteForm() {
 
   return (
     <main
-      className="min-h-screen flex items-center justify-center p-8"
+      className="min-h-screen flex items-center justify-center p-4 sm:p-8 bg-base-200"
       data-theme={config.colors.theme}
     >
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="text-success text-6xl mb-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-16 w-16 mx-auto"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          </div>
-          <h1 className="text-3xl font-extrabold tracking-tight">
-            Welcome to {config.appName}!
-          </h1>
-          <p className="text-base-content/60 mt-2">
+      <div className="card bg-base-100 shadow-xl w-full max-w-md">
+        <div className="card-body">
+          <p className="text-center text-base-content/60 text-sm mb-2">
             Set a password to complete your account setup
           </p>
           {userEmail && (
-            <p className="text-sm mt-2">
+            <p className="text-center text-sm mb-4">
               Account: <strong>{userEmail}</strong>
             </p>
           )}
+
+          <form onSubmit={handleSetPassword} className="space-y-4">
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">New Password</span>
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="input input-bordered w-full"
+                placeholder="At least 8 characters"
+                required
+                minLength={8}
+                autoComplete="new-password"
+              />
+            </div>
+
+            <div className="form-control">
+              <label className="label">
+                <span className="label-text">Confirm Password</span>
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="input input-bordered w-full"
+                placeholder="Confirm your password"
+                required
+                autoComplete="new-password"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary w-full"
+              disabled={isLoading}
+            >
+              {isLoading && (
+                <span className="loading loading-spinner loading-xs"></span>
+              )}
+              Set Password & Get Started
+            </button>
+          </form>
         </div>
-
-        <form onSubmit={handleSetPassword} className="space-y-4">
-          <div className="form-control">
-            <label className="label">
-              <span className="label-text">New Password</span>
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="input input-bordered w-full"
-              placeholder="At least 8 characters"
-              required
-              minLength={8}
-              autoComplete="new-password"
-            />
-          </div>
-
-          <div className="form-control">
-            <label className="label">
-              <span className="label-text">Confirm Password</span>
-            </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="input input-bordered w-full"
-              placeholder="Confirm your password"
-              required
-              autoComplete="new-password"
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="btn btn-primary w-full"
-            disabled={isLoading}
-          >
-            {isLoading && (
-              <span className="loading loading-spinner loading-xs"></span>
-            )}
-            Set Password & Get Started
-          </button>
-        </form>
       </div>
     </main>
   );
@@ -260,7 +237,7 @@ export default function AcceptInvitePage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center">
+        <div className="min-h-screen flex items-center justify-center bg-base-200">
           <span className="loading loading-spinner loading-lg"></span>
         </div>
       }
