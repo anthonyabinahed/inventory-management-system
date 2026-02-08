@@ -1,8 +1,48 @@
 'use server'
 
-import { createSupabaseClient } from "@/libs/supabase/server";
-import { getCurrentUser } from "@/actions/auth";
+import { withAuth } from "@/libs/auth";
 import { getErrorMessage } from "@/libs/utils";
+
+// ============ CONSTANTS ============
+
+// Fields allowed to be updated on reagents table
+const REAGENT_UPDATABLE_FIELDS = [
+  'name', 'internal_barcode', 'description', 'supplier',
+  'storage_location', 'storage_temperature', 'sector', 'machine',
+  'minimum_stock', 'unit'
+];
+
+// ============ HELPER FUNCTIONS ============
+
+/**
+ * Recalculate and update total_quantity for a reagent based on its active lots
+ * This should be called after any lot quantity changes (stockIn, stockOut, deleteLot)
+ */
+async function recalculateReagentTotalQuantity(supabase, reagentId, userId) {
+  // Sum quantities from all active lots for this reagent
+  const { data: lots, error: lotsError } = await supabase
+    .from("lots")
+    .select("quantity")
+    .eq("reagent_id", reagentId)
+    .eq("is_active", true);
+
+  if (lotsError) throw lotsError;
+
+  const totalQuantity = (lots || []).reduce((sum, lot) => sum + lot.quantity, 0);
+
+  // Update the reagent's total_quantity
+  const { error: updateError } = await supabase
+    .from("reagents")
+    .update({ 
+      total_quantity: totalQuantity,
+      updated_by: userId
+    })
+    .eq("id", reagentId);
+
+  if (updateError) throw updateError;
+
+  return totalQuantity;
+}
 
 // ============ REAGENT CRUD OPERATIONS ============
 
@@ -15,9 +55,7 @@ export async function getReagents({
   limit = 25,
   filters = {}
 } = {}) {
-  try {
-    const supabase = await createSupabaseClient();
-
+  return withAuth(async (user, supabase) => {
     // If filtering by hasExpiredLots, first get reagent IDs with expired lots
     let expiredReagentIds = null;
     if (filters.hasExpiredLots) {
@@ -99,18 +137,14 @@ export async function getReagents({
         totalPages: Math.ceil(totalCount / limit)
       }
     };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error), data: [], pagination: { page: 1, limit: 25, total: 0, totalPages: 0 } };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: [], pagination: { page: 1, limit: 25, total: 0, totalPages: 0 } }));
 }
 
 /**
  * Get a single reagent by ID
  */
 export async function getReagentById(id) {
-  try {
-    const supabase = await createSupabaseClient();
-
+  return withAuth(async (user, supabase) => {
     const { data, error } = await supabase
       .from("reagents")
       .select("*")
@@ -120,9 +154,7 @@ export async function getReagentById(id) {
     if (error) throw error;
 
     return { success: true, data };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error) };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
 
 /**
@@ -130,15 +162,7 @@ export async function getReagentById(id) {
  * New reagents start with total_quantity = 0
  */
 export async function createReagent(reagentData) {
-  try {
-    // TODO: isn't there a way to have this check for all server actions here? dependency injection or smthg? 
-    // all server actions need it
-    const user = await getCurrentUser();
-    if (!user) return { success: false, errorMessage: "Unauthorized" };
-
-    const supabase = await createSupabaseClient();
-
-    // Only include master-level fields
+  return withAuth(async (user, supabase) => {
     const { data, error } = await supabase
       .from("reagents")
       .insert({
@@ -162,31 +186,17 @@ export async function createReagent(reagentData) {
     if (error) throw error;
 
     return { success: true, data };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error) };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
 
 /**
  * Update an existing reagent (master data only)
  */
 export async function updateReagent(id, updates) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) return { success: false, errorMessage: "Unauthorized" };
-
-    const supabase = await createSupabaseClient();
-
+  return withAuth(async (user, supabase) => {
     // Only allow master-level fields to be updated
     const safeUpdates = {};
-    const allowedFields = [
-      // TODO: refactor these fields in an enum somewhere
-      'name', 'internal_barcode', 'description', 'supplier',
-      'storage_location', 'storage_temperature', 'sector', 'machine',
-      'minimum_stock', 'unit'
-    ];
-
-    for (const field of allowedFields) {
+    for (const field of REAGENT_UPDATABLE_FIELDS) {
       if (updates[field] !== undefined) {
         safeUpdates[field] = updates[field];
       }
@@ -205,21 +215,14 @@ export async function updateReagent(id, updates) {
     if (error) throw error;
 
     return { success: true, data };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error) };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
 
 /**
  * Soft delete a reagent (and its lots via cascade)
  */
 export async function deleteReagent(id) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) return { success: false, errorMessage: "Unauthorized" };
-
-    const supabase = await createSupabaseClient();
-
+  return withAuth(async (user, supabase) => {
     // Soft delete reagent
     const { error } = await supabase
       .from("reagents")
@@ -235,9 +238,7 @@ export async function deleteReagent(id) {
       .eq("reagent_id", id);
 
     return { success: true };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error) };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
 
 // ============ LOT OPERATIONS ============
@@ -246,9 +247,7 @@ export async function deleteReagent(id) {
  * Get all lots for a reagent
  */
 export async function getLotsForReagent(reagentId, { includeEmpty = true, includeInactive = false } = {}) {
-  try {
-    const supabase = await createSupabaseClient();
-
+  return withAuth(async (user, supabase) => {
     let query = supabase
       .from("lots")
       .select("*")
@@ -268,9 +267,7 @@ export async function getLotsForReagent(reagentId, { includeEmpty = true, includ
     if (error) throw error;
 
     return { success: true, data: data || [] };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error), data: [] };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: [] }));
 }
 
 /**
@@ -286,16 +283,11 @@ export async function stockIn({
   date_of_reception,
   notes
 }) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) return { success: false, errorMessage: "Unauthorized" };
+  if (quantity <= 0) {
+    return { success: false, errorMessage: "Quantity must be greater than 0" };
+  }
 
-    if (quantity <= 0) {
-      return { success: false, errorMessage: "Quantity must be greater than 0" };
-    }
-
-    const supabase = await createSupabaseClient();
-
+  return withAuth(async (user, supabase) => {
     // Check if lot already exists for this reagent
     const { data: existingLot } = await supabase
       .from("lots")
@@ -309,7 +301,6 @@ export async function stockIn({
     let action;
 
     if (existingLot) {
-      // TODO: refactor this method, duplicated code
       // Add to existing lot (keep original expiry date)
       const newQuantity = existingLot.quantity + quantity;
 
@@ -329,15 +320,12 @@ export async function stockIn({
       action = 'updated';
 
       // Log stock movement
-      await logStockMovement({
-        reagent_id,
+      await logStockMovement(supabase, user.id, {
         lot_id: existingLot.id,
         movement_type: 'in',
         quantity,
         quantity_before: existingLot.quantity,
         quantity_after: newQuantity,
-        lot_number,
-        expiry_date: existingLot.expiry_date,
         notes
       });
     } else {
@@ -366,39 +354,32 @@ export async function stockIn({
       action = 'created';
 
       // Log stock movement
-      await logStockMovement({
-        reagent_id,
+      await logStockMovement(supabase, user.id, {
         lot_id: data.id,
         movement_type: 'in',
         quantity,
         quantity_before: 0,
         quantity_after: quantity,
-        lot_number,
-        expiry_date,
         notes: notes || 'New lot created'
       });
     }
 
+    // Recalculate reagent total_quantity after lot change
+    await recalculateReagentTotalQuantity(supabase, reagent_id, user.id);
+
     return { success: true, data: lot, action };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error) };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
 
 /**
  * Stock Out - Remove stock from a specific lot
  */
 export async function stockOut(lotId, quantity, { notes } = {}) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) return { success: false, errorMessage: "Unauthorized" };
+  if (quantity <= 0) {
+    return { success: false, errorMessage: "Quantity must be greater than 0" };
+  }
 
-    if (quantity <= 0) {
-      return { success: false, errorMessage: "Quantity must be greater than 0" };
-    }
-
-    const supabase = await createSupabaseClient();
-
+  return withAuth(async (user, supabase) => {
     // Get current lot
     const { data: lot, error: fetchError } = await supabase
       .from("lots")
@@ -423,22 +404,20 @@ export async function stockOut(lotId, quantity, { notes } = {}) {
     if (updateError) throw updateError;
 
     // Log the movement
-    await logStockMovement({
-      reagent_id: lot.reagent_id,
+    await logStockMovement(supabase, user.id, {
       lot_id: lotId,
       movement_type: 'out',
       quantity: -quantity,  // Negative for out
       quantity_before: lot.quantity,
       quantity_after: newQuantity,
-      lot_number: lot.lot_number,
-      expiry_date: lot.expiry_date,
       notes
     });
 
+    // Recalculate reagent total_quantity after lot change
+    await recalculateReagentTotalQuantity(supabase, lot.reagent_id, user.id);
+
     return { success: true, newQuantity };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error) };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
 
 
@@ -446,12 +425,17 @@ export async function stockOut(lotId, quantity, { notes } = {}) {
  * Soft delete a lot
  */
 export async function deleteLot(lotId) {
-  try {
-    const user = await getCurrentUser();
-    if (!user) return { success: false, errorMessage: "Unauthorized" };
+  return withAuth(async (user, supabase) => {
+    // First get the lot to know which reagent to update
+    const { data: lot, error: fetchError } = await supabase
+      .from("lots")
+      .select("reagent_id")
+      .eq("id", lotId)
+      .single();
 
-    const supabase = await createSupabaseClient();
+    if (fetchError) throw fetchError;
 
+    // Soft delete the lot
     const { error } = await supabase
       .from("lots")
       .update({ is_active: false, updated_by: user.id })
@@ -459,27 +443,24 @@ export async function deleteLot(lotId) {
 
     if (error) throw error;
 
+    // Recalculate reagent total_quantity after lot deletion
+    await recalculateReagentTotalQuantity(supabase, lot.reagent_id, user.id);
+
     return { success: true };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error) };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
 
 // ============ STOCK MOVEMENT LOGGING ============
 
 /**
  * Internal helper to log stock movements
+ * Called from within withAuth context, so user and supabase are passed in
  */
-async function logStockMovement(movementData) {
+async function logStockMovement(supabase, userId, movementData) {
   try {
-    const user = await getCurrentUser();
-    if (!user) return;
-
-    const supabase = await createSupabaseClient();
-
     const { error } = await supabase.from("stock_movements").insert({
       ...movementData,
-      performed_by: user.id
+      performed_by: userId
     });
 
     if (error) throw error;
@@ -490,30 +471,46 @@ async function logStockMovement(movementData) {
 
 /**
  * Get stock movement history for all lots of a reagent
+ * Joins through lots table since stock_movements only has lot_id
  */
 export async function getReagentStockHistory(reagentId, { limit = 100 } = {}) {
-  try {
-    const supabase = await createSupabaseClient();
-    // TODO check this method
+  return withAuth(async (user, supabase) => {
+    // First get all lot IDs for this reagent
+    const { data: lots, error: lotsError } = await supabase
+      .from("lots")
+      .select("id")
+      .eq("reagent_id", reagentId);
+
+    if (lotsError) throw lotsError;
+
+    const lotIds = (lots || []).map(l => l.id);
+    
+    if (lotIds.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    // Get movements for all lots of this reagent
     const { data, error } = await supabase
       .from("stock_movements")
       .select(`
         *,
+        lots (
+          lot_number,
+          expiry_date
+        ),
         profiles:performed_by (
           email,
           full_name
         )
       `)
-      .eq("reagent_id", reagentId)
+      .in("lot_id", lotIds)
       .order("performed_at", { ascending: false })
       .limit(limit);
 
     if (error) throw error;
 
     return { success: true, data: data || [] };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error), data: [] };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: [] }));
 }
 
 // ============ ALERTS & STATISTICS ============
@@ -522,9 +519,7 @@ export async function getReagentStockHistory(reagentId, { limit = 100 } = {}) {
  * Get reagents with low stock (total_quantity <= minimum_stock)
  */
 export async function getLowStockReagents() {
-  try {
-    const supabase = await createSupabaseClient();
-
+  return withAuth(async (user, supabase) => {
     const { data, error } = await supabase
       .from("reagents")
       .select("*")
@@ -536,9 +531,7 @@ export async function getLowStockReagents() {
     const lowStockItems = (data || []).filter(r => r.total_quantity <= r.minimum_stock);
 
     return { success: true, data: lowStockItems };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error), data: [] };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: [] }));
 }
 
 
@@ -546,13 +539,13 @@ export async function getLowStockReagents() {
  * Get count of lots that are already expired
  */
 export async function getExpiredLotsCount() {
-  try {
-    const supabase = await createSupabaseClient();
+  return withAuth(async (user, supabase) => {
     const today = new Date().toISOString().split('T')[0];
 
+    // head: true returns only the count without fetching actual rows (optimization)
     const { count, error } = await supabase
       .from("lots")
-      .select("id", { count: 'exact', head: true }) // TODO: what's this head true? 
+      .select("id", { count: 'exact', head: true })
       .eq("is_active", true)
       .gt("quantity", 0)
       .lt("expiry_date", today);
@@ -560,21 +553,17 @@ export async function getExpiredLotsCount() {
     if (error) throw error;
 
     return { success: true, count: count || 0 };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error), count: 0 };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), count: 0 }));
 }
 
 /**
  * Get filter options (unique values for dropdowns)
  */
 export async function getFilterOptions() {
-  try {
-    const supabase = await createSupabaseClient();
-
+  return withAuth(async (user, supabase) => {
     const { data, error } = await supabase
       .from("reagents")
-      .select("supplier, storage_location")
+      .select("supplier, storage_location, sector, machine")
       .eq("is_active", true);
 
     if (error) throw error;
@@ -582,23 +571,21 @@ export async function getFilterOptions() {
     // Extract unique values
     const suppliers = [...new Set((data || []).map(r => r.supplier).filter(Boolean))].sort();
     const locations = [...new Set((data || []).map(r => r.storage_location).filter(Boolean))].sort();
-    // TODO: add machines as well as sectors
+    const sectors = [...new Set((data || []).map(r => r.sector).filter(Boolean))].sort();
+    const machines = [...new Set((data || []).map(r => r.machine).filter(Boolean))].sort();
+
     return {
       success: true,
-      data: { suppliers, locations }
+      data: { suppliers, locations, sectors, machines }
     };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error), data: { suppliers: [], locations: [] } };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: { suppliers: [], locations: [], sectors: [], machines: [] } }));
 }
 
 /**
  * Check if a lot number exists for a reagent
  */
 export async function checkLotExists(reagentId, lotNumber) {
-  try {
-    const supabase = await createSupabaseClient();
-
+  return withAuth(async (user, supabase) => {
     const { data, error } = await supabase
       .from("lots")
       .select("id, quantity, expiry_date")
@@ -610,7 +597,5 @@ export async function checkLotExists(reagentId, lotNumber) {
     if (error) throw error;
 
     return { success: true, exists: !!data, lot: data };
-  } catch (error) {
-    return { success: false, errorMessage: getErrorMessage(error), exists: false };
-  }
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), exists: false }));
 }

@@ -5,7 +5,7 @@ import { Dialog, Transition } from "@headlessui/react";
 import { X, Info } from "lucide-react";
 import toast from "react-hot-toast";
 import { createReagent, updateReagent } from "@/actions/inventory";
-import { SECTORS, MACHINES, UNITS } from "@/libs/constants";
+import { UNITS } from "@/libs/constants";
 
 const initialFormData = {
   name: '',
@@ -284,36 +284,30 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                         <span className="label-text font-medium">Sector</span>
                         <span className="label-text-alt text-error">*</span>
                       </label>
-                      <select
+                      <input
+                        type="text"
                         name="sector"
-                        className="select select-bordered w-full"
+                        className="input input-bordered w-full"
+                        placeholder="e.g., Hematology"
                         value={formData.sector}
                         onChange={handleChange}
                         required
-                      >
-                        <option value="">Select sector</option>
-                        {SECTORS.map(s => (
-                          <option key={s.value} value={s.value}>{s.label}</option>
-                        ))}
-                      </select>
+                      />
                     </div>
 
-                    <div className="form-control">
+                   <div className="form-control">
                       <label className="label">
                         <span className="label-text font-medium">Machine</span>
                         <span className="label-text-alt">(optional)</span>
                       </label>
-                      <select
+                      <input
+                        type="text"
                         name="machine"
-                        className="select select-bordered w-full"
+                        className="input input-bordered w-full"
+                        placeholder="e.g., Sysmex XN"
                         value={formData.machine}
                         onChange={handleChange}
-                      >
-                        <option value="">No specific machine</option>
-                        {MACHINES.map(m => (
-                          <option key={m.value} value={m.value}>{m.label}</option>
-                        ))}
-                      </select>
+                      />
                     </div>
                   </div>
 

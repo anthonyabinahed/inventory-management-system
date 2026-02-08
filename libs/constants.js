@@ -1,29 +1,5 @@
 // Inventory constants for laboratory reagent management
 
-// TODO: Remove these from constants
-export const SECTORS = [
-  { value: 'hematology', label: 'Hematology' },
-  { value: 'microbiology', label: 'Microbiology' },
-  { value: 'biochemistry', label: 'Biochemistry' },
-  { value: 'immunology', label: 'Immunology' },
-  { value: 'coagulation', label: 'Coagulation' },
-  { value: 'urinalysis', label: 'Urinalysis' },
-  { value: 'other', label: 'Other' },
-];
-
-// TODO: Remove these from constants
-export const MACHINES = [
-  { value: 'dxi_9000', label: 'DXI 9000' },
-  { value: 'kryptor', label: 'Kryptor' },
-  { value: 'au_680', label: 'AU 680' },
-  { value: 'sysmex_xn', label: 'Sysmex XN' },
-  { value: 'vitek_2', label: 'Vitek 2' },
-  { value: 'bc_6800', label: 'BC 6800' },
-  { value: 'cobas_e411', label: 'Cobas E411' },
-  { value: 'architect_i2000', label: 'Architect i2000' },
-  { value: 'other', label: 'Other' },
-];
-
 export const UNITS = [
   { value: 'vials', label: 'Vials' },
   { value: 'tests', label: 'Tests' },
@@ -69,11 +45,4 @@ export function getStockStatus(quantity, minimumStock) {
   if (quantity <= 0) return { status: 'out', color: 'error' };
   if (quantity <= minimumStock) return { status: 'low', color: 'warning' };
   return { status: 'ok', color: 'default' };
-}
-
-// Get label for a value from a constants array
-// TODO: Remove since we are not using the constants of Sectors and machines
-export function getLabel(constants, value) {
-  const item = constants.find(c => c.value === value);
-  return item ? item.label : value;
 }

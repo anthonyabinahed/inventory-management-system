@@ -8,24 +8,15 @@ import { getErrorMessage } from "@/libs/utils";
 import config from "@/config";
 import { getCurrentUser } from "@/actions/auth";
 
-/**
- * Update a user's role
- */
-export async function updateUserRole(userId, newRole) {
-    const supabase = await createSupabaseClient();
-    const { error } = await supabase
-        .from("profiles")
-        .update({ role: newRole })
-        .eq("id", userId);
-
-    if (error) throw error;
-    return { success: true };
-}
+// ============ HELPER FUNCTIONS ============
 
 /**
  * Creates a Supabase admin client with service role key.
  * This client bypasses RLS and can manage users.
+ * Exported for use in auth.js for password reset flows.
+ * Note: Should only be used in server-side code for admin operations.
  */
+
 export async function getSupabaseAdmin() {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -39,10 +30,12 @@ export async function getSupabaseAdmin() {
     });
 }
 
+
 /**
  * Verifies the current user is an admin (cached per request)
+ * Internal helper for admin action authorization.
  */
-export const verifyAdmin = cache(async () => {
+const verifyAdmin = cache(async () => {
     const user = await getCurrentUser();
 
     if (!user) {
@@ -62,6 +55,37 @@ export const verifyAdmin = cache(async () => {
 
     return { isAdmin: true, user, error: null };
 });
+
+// ============ ADMIN ACTIONS ============
+
+/**
+ * Update a user's role (admin only)
+ */
+export async function updateUserRole(userId, newRole) {
+    try {
+        const { isAdmin, error: authError } = await verifyAdmin();
+        
+        if (!isAdmin) {
+            return { success: false, errorMessage: authError };
+        }
+
+        if (!["admin", "user"].includes(newRole)) {
+            return { success: false, errorMessage: "Invalid role. Must be 'admin' or 'user'" };
+        }
+
+        const supabase = await createSupabaseClient();
+        const { error } = await supabase
+            .from("profiles")
+            .update({ role: newRole })
+            .eq("id", userId);
+
+        if (error) throw error;
+        return { success: true };
+    } catch (error) {
+        return { success: false, errorMessage: getErrorMessage(error) };
+    }
+}
+
 
 /**
  * Invite a new user (admin only)
@@ -137,7 +161,7 @@ export async function inviteUser(email, fullName = "", role = "user") {
                     <p>Click the button below to set your password and get started:</p>
 
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="${inviteUrl}"
+                    <a href="${inviteUrl}"
                            style="display: inline-block; padding: 14px 32px; background-color: ${config.colors.main}; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
                             Accept Invitation
                         </a>
@@ -155,11 +179,11 @@ export async function inviteUser(email, fullName = "", role = "user") {
                     </p>
                 </body>
                 </html>
-            `,
+                `,
             text: `You've been invited to ${config.appName}!\n\nHello${fullName ? ` ${fullName}` : ""},\n\nClick this link to set your password and get started:\n${inviteUrl}\n\nThis invitation link will expire in 24 hours.`,
         });
 
-        return { success: true, userId: data.user?.id, errorMessage: null };
+                return { success: true, userId: data.user?.id, errorMessage: null };
     } catch (error) {
         console.error("Invite user error:", error);
         return { success: false, errorMessage: getErrorMessage(error) };

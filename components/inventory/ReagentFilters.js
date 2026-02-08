@@ -1,7 +1,6 @@
 "use client";
 
 import { Search, X, Filter, AlertTriangle, Clock } from "lucide-react";
-import { SECTORS, MACHINES } from "@/libs/constants";
 
 export default function ReagentFilters({ filters, options, alertCounts = {}, onFilterChange }) {
   const hasActiveFilters = filters.search || filters.sector || filters.machine ||
@@ -37,29 +36,27 @@ export default function ReagentFilters({ filters, options, alertCounts = {}, onF
         />
       </div>
 
-      {/* Sector dropdown */}
-      {/* TODO: no dropdown, take list from sectios available in data. same for machines */}
-
+      {/* Sector dropdown - hidden on mobile, populated from data */}
       <select
-        className="select select-bordered select-sm w-28"
+        className="select select-bordered select-sm w-28 hidden sm:inline-flex"
         value={filters.sector}
         onChange={(e) => updateFilter('sector', e.target.value)}
       >
-        <option value="">Sector</option>
-        {SECTORS.map(s => (
-          <option key={s.value} value={s.value}>{s.label}</option>
+        <option value="">All Sectors</option>
+        {options.sectors?.map(s => (
+          <option key={s} value={s}>{s}</option>
         ))}
       </select>
 
-      {/* Machine dropdown - hidden on mobile */}
+      {/* Machine dropdown - hidden on mobile, populated from data */}
       <select
         className="select select-bordered select-sm w-28 hidden sm:inline-flex"
         value={filters.machine}
         onChange={(e) => updateFilter('machine', e.target.value)}
       >
-        <option value="">Machine</option>
-        {MACHINES.map(m => (
-          <option key={m.value} value={m.value}>{m.label}</option>
+        <option value="">All Machines</option>
+        {options.machines?.map(m => (
+          <option key={m} value={m}>{m}</option>
         ))}
       </select>
 
@@ -72,6 +69,20 @@ export default function ReagentFilters({ filters, options, alertCounts = {}, onF
         <div tabIndex={0} className="dropdown-content z-[1] p-4 shadow bg-base-100 rounded-box w-64">
           <div className="flex flex-col gap-3">
             <div className="form-control sm:hidden">
+              <label className="label label-text text-xs">Sector</label>
+              <select
+                className="select select-bordered select-sm"
+                value={filters.sector}
+                onChange={(e) => updateFilter('sector', e.target.value)}
+              >
+                <option value="">All Sectors</option>
+                {options.sectors?.map(s => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-control sm:hidden">
               <label className="label label-text text-xs">Machine</label>
               <select
                 className="select select-bordered select-sm"
@@ -79,8 +90,8 @@ export default function ReagentFilters({ filters, options, alertCounts = {}, onF
                 onChange={(e) => updateFilter('machine', e.target.value)}
               >
                 <option value="">All Machines</option>
-                {MACHINES.map(m => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
+                {options.machines?.map(m => (
+                  <option key={m} value={m}>{m}</option>
                 ))}
               </select>
             </div>

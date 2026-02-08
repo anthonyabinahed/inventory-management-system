@@ -5,7 +5,6 @@ import { ChevronRight, ChevronDown, MoreHorizontal, Edit2, Trash2, History } fro
 import toast from "react-hot-toast";
 import { deleteReagent } from "@/actions/inventory";
 import { StockBadge } from "./StatusBadges";
-import { getLabel, SECTORS, MACHINES } from "@/libs/constants";
 
 export default function ReagentRow({
   reagent,
@@ -87,16 +86,14 @@ export default function ReagentRow({
       {/* Sector - hidden on mobile */}
       <td className="hidden md:table-cell" onClick={onToggleExpand}>
         <span className="badge badge-ghost badge-sm capitalize">
-          {/* TODO: replace this probably ? */}
-          {getLabel(SECTORS, reagent.sector)}
+          {reagent.sector}
         </span>
       </td>
 
       {/* Machine - hidden on smaller screens */}
       <td className="hidden xl:table-cell" onClick={onToggleExpand}>
-        {/* TODO: replace this probably ? */}
         {reagent.machine && (
-          <span className="text-sm">{getLabel(MACHINES, reagent.machine)}</span>
+          <span className="text-sm">{reagent.machine}</span>
         )}
       </td>
 

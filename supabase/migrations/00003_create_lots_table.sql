@@ -1,5 +1,11 @@
--- Migration: Create lots table for per-lot tracking
+
+
+-- Migration: Create lots table
 -- Each reagent can have multiple lots with different expiry dates and quantities
+
+-- =============================================================================
+-- TABLE DEFINITION
+-- =============================================================================
 
 CREATE TABLE public.lots (
   -- Primary key
@@ -34,7 +40,10 @@ CREATE TABLE public.lots (
   CONSTRAINT unique_reagent_lot UNIQUE (reagent_id, lot_number)
 );
 
--- Indexes for common queries
+-- =============================================================================
+-- INDEXES
+-- =============================================================================
+
 CREATE INDEX idx_lots_reagent_id ON public.lots(reagent_id);
 CREATE INDEX idx_lots_lot_number ON public.lots(lot_number);
 CREATE INDEX idx_lots_expiry_date ON public.lots(expiry_date);
@@ -53,10 +62,11 @@ CREATE INDEX idx_lots_fifo ON public.lots(reagent_id, expiry_date ASC, created_a
 CREATE INDEX idx_lots_expiry_active ON public.lots(expiry_date, is_active)
   WHERE is_active = true AND quantity > 0;
 
--- Enable Row Level Security
-ALTER TABLE public.lots ENABLE ROW LEVEL SECURITY;
+-- =============================================================================
+-- ROW LEVEL SECURITY
+-- =============================================================================
 
--- RLS Policies
+ALTER TABLE public.lots ENABLE ROW LEVEL SECURITY;
 
 -- All authenticated users can view lots
 CREATE POLICY "Authenticated can view lots"
@@ -91,11 +101,20 @@ CREATE POLICY "Admins can delete lots"
     )
   );
 
+-- =============================================================================
+-- TRIGGERS
+-- =============================================================================
+
 -- Trigger for updated_at timestamp
 CREATE TRIGGER on_lot_updated
   BEFORE UPDATE ON public.lots
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_updated_at();
 
--- Grant table permissions
+-- =============================================================================
+-- PERMISSIONS
+-- =============================================================================
+
 GRANT SELECT, INSERT, UPDATE ON public.lots TO authenticated;
+
+

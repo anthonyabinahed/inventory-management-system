@@ -50,9 +50,16 @@ export async function login(formData) {
  * Sign out the current user
  */
 export async function signOut() {
+    const user = await getCurrentUser();
+    if (!user) {
+        return { success: false, errorMessage: "Unauthorized" };
+    }
+    
     const supabase = await createSupabaseClient();
     await supabase.auth.signOut();
+    return { success: true };
 }
+
 
 /**
  * Set session from OAuth tokens (used for invite/reset flows)
@@ -93,10 +100,15 @@ export async function verifyInviteToken(tokenHash) {
 }
 
 /**
- * Update the current user's password
+ * Update the current user's password (requires authentication)
  */
 export async function updatePassword(password) {
     try {
+        const user = await getCurrentUser();
+        if (!user) {
+            return { success: false, errorMessage: "Unauthorized" };
+        }
+
         const supabase = await createSupabaseClient();
         const { error } = await supabase.auth.updateUser({ password });
 

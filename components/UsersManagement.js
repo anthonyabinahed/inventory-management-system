@@ -35,7 +35,7 @@ export default function UsersManagement() {
 
   const loadData = async () => {
     try {
-      const [user, usersData] = await Promise.all([
+      const [user, usersResults] = await Promise.all([
         getCurrentUser(),
         getAllUsers()
       ]);
@@ -43,7 +43,12 @@ export default function UsersManagement() {
       if (user) {
         setCurrentUserId(user.id);
       }
-      setUsers(usersData);
+
+      if (!usersResults.success) {
+        throw new Error(usersResults.errorMessage);
+      }
+
+      setUsers(usersResults.data);
     } catch (error) {
       toast.error("Failed to load users");
     } finally {
