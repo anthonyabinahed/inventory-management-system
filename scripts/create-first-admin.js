@@ -5,7 +5,7 @@
  * Creates the first admin user for the laboratory stock management system.
  *
  * Usage:
-SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+SUPABASE_URL=https://xpejogsvvskpmvvfievz.supabase.co SUPABASE_SERVICE_ROLE_KEY=... \
 ADMIN_EMAIL=anthonyabinahed@gmail.com ADMIN_PASSWORD=12345Aa@ ADMIN_NAME="Anthony Nahed" \
 npm run create-admin
  */
@@ -28,6 +28,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 });
 
 async function createAdmin() {
+  // Try to create the user first
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email: ADMIN_EMAIL,
     password: ADMIN_PASSWORD,
@@ -38,18 +39,43 @@ async function createAdmin() {
     },
   });
 
-  if (error) throw error;
+  let userId;
 
-  const { error: updateError } = await supabaseAdmin
-    .from("profiles")
-    .update({ role: "admin", full_name: ADMIN_NAME })
-    .eq("id", data.user.id);
+  if (error) {
+    // User already exists — look them up and ensure admin role
+    console.log("User already exists, updating to admin...");
+    const { data: users, error: listError } =
+      await supabaseAdmin.auth.admin.listUsers();
+    if (listError) throw listError;
 
-  if (updateError) {
-    console.warn("Could not update profile:", updateError.message);
+    const existingUser = users.users.find((u) => u.email === ADMIN_EMAIL);
+    if (!existingUser) throw new Error("Could not find existing user");
+
+    userId = existingUser.id;
+
+    // Update user metadata to include admin role
+    const { error: updateAuthError } =
+      await supabaseAdmin.auth.admin.updateUserById(userId, {
+        user_metadata: { role: "admin", full_name: ADMIN_NAME },
+      });
+    if (updateAuthError) throw updateAuthError;
+  } else {
+    userId = data.user.id;
   }
 
-  return data.user;
+  // Upsert the profile to ensure it exists with admin role
+  const { error: upsertError } = await supabaseAdmin
+    .from("profiles")
+    .upsert(
+      { id: userId, email: ADMIN_EMAIL, role: "admin", full_name: ADMIN_NAME },
+      { onConflict: "id" }
+    );
+
+  if (upsertError) {
+    console.warn("Could not upsert profile:", upsertError.message);
+  }
+
+  return { id: userId, email: ADMIN_EMAIL };
 }
 
 createAdmin()

@@ -10,7 +10,8 @@
     "create-admin": "node scripts/create-first-admin.js",
     "db:link:staging": "npx supabase link --project-ref xpejogsvvskpmvvfievz",
     "db:link:prod": "npx supabase link --project-ref yzrbgdymgwlzrfhtmxyv",
-    "db:push": "npx supabase db push"
+    "db:push:staging": "npm run db:link:staging && npx supabase db push",
+    "db:push:prod": "npm run db:link:prod && npx supabase db push"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.0",

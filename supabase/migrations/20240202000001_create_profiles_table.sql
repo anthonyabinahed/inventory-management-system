@@ -68,3 +68,6 @@ CREATE POLICY "Admins can delete profiles"
     )
     AND id != auth.uid()
   );
+
+-- Grant table-level permissions to authenticated role
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.profiles TO authenticated;

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { LayoutDashboard, Package, ScanLine } from "lucide-react";
 import { Overview } from "@/components/Overview";
 import { Inventory } from "@/components/Inventory";
 import { Scanner } from "@/components/Scanner";
+
+const TAB_STORAGE_KEY = "inventory-active-tab";
 
 const tabs = [
   {
@@ -26,6 +28,17 @@ const tabs = [
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState(tabs[0].id);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(TAB_STORAGE_KEY);
+    if (saved && tabs.some(t => t.id === saved)) {
+      setActiveTab(saved);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(TAB_STORAGE_KEY, activeTab);
+  }, [activeTab]);
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
