@@ -33,9 +33,9 @@ export async function getSupabaseAdmin() {
 
 /**
  * Verifies the current user is an admin (cached per request)
- * Internal helper for admin action authorization.
+ * Used by layout for UI display and internally for admin action authorization.
  */
-const verifyAdmin = cache(async () => {
+export const verifyAdmin = cache(async () => {
     const user = await getCurrentUser();
 
     if (!user) {
