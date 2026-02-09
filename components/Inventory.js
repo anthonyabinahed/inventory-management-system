@@ -6,9 +6,7 @@ import toast from "react-hot-toast";
 import {
   getReagents,
   getReagentById,
-  getFilterOptions,
-  getLowStockReagents,
-  getExpiredLotsCount
+  getFilterOptions
 } from "@/actions/inventory";
 import ReagentTable from "./inventory/ReagentTable";
 import ReagentFilters from "./inventory/ReagentFilters";
@@ -16,23 +14,25 @@ import ReagentModal from "./inventory/ReagentModal";
 import StockHistoryModal from "./inventory/StockHistoryModal";
 import Pagination from "./inventory/Pagination";
 
-export function Inventory() {
+const DEFAULT_FILTERS = {
+  search: '',
+  category: '',
+  sector: '',
+  machine: '',
+  supplier: '',
+  storage_location: '',
+  lowStock: false,
+  hasExpiredLots: false
+};
+
+export function Inventory({ initialFilters = {} }) {
   // Data state
   const [reagents, setReagents] = useState([]);
   const [filterOptions, setFilterOptions] = useState({ suppliers: [], locations: [] });
   const [pagination, setPagination] = useState({ page: 1, limit: 25, total: 0, totalPages: 0 });
 
-  // Filter state
-  const [filters, setFilters] = useState({
-    search: '',
-    category: '',
-    sector: '',
-    machine: '',
-    supplier: '',
-    storage_location: '',
-    lowStock: false,
-    hasExpiredLots: false
-  });
+  // Filter state - merge initial filters with defaults
+  const [filters, setFilters] = useState({ ...DEFAULT_FILTERS, ...initialFilters });
 
   // UI state
   const [isLoading, setIsLoading] = useState(true);
@@ -46,11 +46,15 @@ export function Inventory() {
   const [viewingReagent, setViewingReagent] = useState(null);
   const [historyReagent, setHistoryReagent] = useState(null);
 
-  // Alert counts
-  const [alertCounts, setAlertCounts] = useState({ lowStock: 0, expiredLots: 0 });
-
   // Track if initial data has loaded
   const [isInitialized, setIsInitialized] = useState(false);
+
+  // Update filters when initialFilters prop changes
+  useEffect(() => {
+    if (Object.keys(initialFilters).length > 0) {
+      setFilters({ ...DEFAULT_FILTERS, ...initialFilters });
+    }
+  }, [initialFilters]);
 
   // Initial data load
   useEffect(() => {
@@ -69,11 +73,9 @@ export function Inventory() {
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
-      const [reagentsResult, optionsResult, lowStockResult, expiredLotsResult] = await Promise.all([
+      const [reagentsResult, optionsResult] = await Promise.all([
         getReagents({ page: 1, limit: pagination.limit, filters }),
-        getFilterOptions(),
-        getLowStockReagents(),
-        getExpiredLotsCount()
+        getFilterOptions()
       ]);
 
       if (reagentsResult.success) {
@@ -86,11 +88,6 @@ export function Inventory() {
       if (optionsResult.success) {
         setFilterOptions(optionsResult.data);
       }
-
-      setAlertCounts({
-        lowStock: lowStockResult.data?.length || 0,
-        expiredLots: expiredLotsResult.count || 0
-      });
     } catch (error) {
       toast.error("Failed to load inventory");
     } finally {
@@ -127,28 +124,12 @@ export function Inventory() {
     setIsRefreshing(false);
   };
 
-  const refreshAlertCounts = async () => {
-    try {
-      const [lowStockResult, expiredLotsResult] = await Promise.all([
-        getLowStockReagents(),
-        getExpiredLotsCount()
-      ]);
-      setAlertCounts({
-        lowStock: lowStockResult.data?.length || 0,
-        expiredLots: expiredLotsResult.count || 0
-      });
-    } catch (error) {
-      console.error("Failed to refresh alert counts:", error);
-    }
-  };
-
   const handleReagentUpdated = async (reagentId) => {
     try {
       const result = await getReagentById(reagentId);
       if (result.success && result.data) {
         setReagents(prev => prev.map(r => r.id === reagentId ? result.data : r));
       }
-      refreshAlertCounts();
     } catch (error) {
       handleRefresh();
     }
@@ -201,7 +182,6 @@ export function Inventory() {
         <ReagentFilters
           filters={filters}
           options={filterOptions}
-          alertCounts={alertCounts}
           onFilterChange={handleFilterChange}
         />
 

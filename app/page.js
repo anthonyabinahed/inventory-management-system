@@ -28,6 +28,7 @@ const tabs = [
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState(tabs[0].id);
+  const [inventoryFilters, setInventoryFilters] = useState({});
 
   useEffect(() => {
     const saved = localStorage.getItem(TAB_STORAGE_KEY);
@@ -39,6 +40,11 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem(TAB_STORAGE_KEY, activeTab);
   }, [activeTab]);
+
+  const handleNavigateToInventory = (filters = {}) => {
+    setInventoryFilters(filters);
+    setActiveTab("inventory");
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8">
@@ -58,7 +64,13 @@ export default function Home() {
                     ? "animate-opacity bg-base-100 shadow"
                     : "text-base-content/75 hover:text-base-content"
                 }`}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  // Clear filters when manually switching to inventory tab
+                  if (tab.id === "inventory") {
+                    setInventoryFilters({});
+                  }
+                }}
               >
                 <Icon className="size-4 sm:size-5" />
                 <span className="hidden xs:inline sm:inline">{tab.title}</span>
@@ -69,8 +81,8 @@ export default function Home() {
 
         {/* Tab Content */}
         <div className="animate-opacity" key={activeTab}>
-          {activeTab === "overview" && <Overview />}
-          {activeTab === "inventory" && <Inventory />}
+          {activeTab === "overview" && <Overview onNavigateToInventory={handleNavigateToInventory} />}
+          {activeTab === "inventory" && <Inventory key={JSON.stringify(inventoryFilters)} initialFilters={inventoryFilters} />}
           {activeTab === "scanner" && <Scanner />}
         </div>
       </div>

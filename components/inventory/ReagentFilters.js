@@ -3,7 +3,7 @@
 import { Search, X, Filter, AlertTriangle, Clock } from "lucide-react";
 import { CATEGORIES } from "@/libs/constants";
 
-export default function ReagentFilters({ filters, options, alertCounts = {}, onFilterChange }) {
+export default function ReagentFilters({ filters, options, onFilterChange }) {
   const hasActiveFilters = filters.search || filters.category || filters.sector || filters.machine ||
     filters.supplier || filters.storage_location || filters.lowStock || filters.hasExpiredLots;
 
@@ -50,18 +50,6 @@ export default function ReagentFilters({ filters, options, alertCounts = {}, onF
         ))}
       </select>
 
-      {/* Sector dropdown - hidden on mobile, populated from data */}
-      <select
-        className="select select-bordered select-sm w-28 hidden sm:inline-flex"
-        value={filters.sector}
-        onChange={(e) => updateFilter('sector', e.target.value)}
-      >
-        <option value="">All Sectors</option>
-        {options.sectors?.map(s => (
-          <option key={s} value={s}>{s}</option>
-        ))}
-      </select>
-
       {/* Machine dropdown - hidden on mobile, populated from data */}
       <select
         className="select select-bordered select-sm w-28 hidden sm:inline-flex"
@@ -96,7 +84,7 @@ export default function ReagentFilters({ filters, options, alertCounts = {}, onF
               </select>
             </div>
 
-            <div className="form-control sm:hidden">
+            <div className="form-control">
               <label className="label label-text text-xs">Sector</label>
               <select
                 className="select select-bordered select-sm"
@@ -158,16 +146,13 @@ export default function ReagentFilters({ filters, options, alertCounts = {}, onF
       {/* Divider */}
       <div className="hidden sm:block w-px h-6 bg-base-300" />
 
-      {/* Quick filter buttons with counts */}
+      {/* Quick filter buttons */}
       <button
         className={`btn btn-sm ${filters.lowStock ? 'btn-warning' : 'btn-ghost'}`}
         onClick={() => updateFilter('lowStock', !filters.lowStock)}
       >
         <AlertTriangle className="w-3 h-3" />
         <span className="text-xs">Low Stock</span>
-        {alertCounts.lowStock > 0 && (
-          <span className="badge badge-xs badge-warning">{alertCounts.lowStock}</span>
-        )}
       </button>
       <button
         className={`btn btn-sm ${filters.hasExpiredLots ? 'btn-error' : 'btn-ghost'}`}
@@ -175,9 +160,6 @@ export default function ReagentFilters({ filters, options, alertCounts = {}, onF
       >
         <Clock className="w-3 h-3" />
         <span className="text-xs">Expired</span>
-        {alertCounts.expiredLots > 0 && (
-          <span className="badge badge-xs badge-error">{alertCounts.expiredLots}</span>
-        )}
       </button>
 
       {/* Clear filters button */}

@@ -117,19 +117,6 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved, viewOn
                   </button>
                 </div>
 
-                {/* Info banner for new reagents */}
-                {!isEditing && !viewOnly && (
-                  <div className="px-6 py-3 bg-info/10 border-b border-info/20">
-                    <div className="flex items-start gap-2 text-sm text-info-content">
-                      <Info className="w-4 h-4 mt-0.5 shrink-0" />
-                      <p>
-                        New items start with zero stock. After creating the item,
-                        expand its row and click "Add Stock" to add lots with quantities and expiry dates.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
                 {/* Stock summary in view mode */}
                 {viewOnly && reagent && (
                   <div className="px-6 py-3 bg-base-200">

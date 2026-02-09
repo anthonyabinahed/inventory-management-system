@@ -56,6 +56,7 @@ export async function getReagents({
         .from("lots")
         .select("reagent_id")
         .eq("is_active", true)
+        .gt("quantity", 0)
         .lt("expiry_date", today);
 
       if (expiredError) throw expiredError;
@@ -72,6 +73,9 @@ export async function getReagents({
         };
       }
     }
+
+    // For lowStock filter, we need to fetch all data first since Supabase doesn't support column comparison
+    const needsClientFilter = filters.lowStock;
 
     let query = supabase
       .from("reagents")
@@ -103,24 +107,31 @@ export async function getReagents({
       query = query.or(`name.ilike.%${filters.search}%,reference.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
     }
 
-    // Apply sorting (always alphabetical by name) and pagination
-    const offset = (page - 1) * limit;
-    query = query
-      .order('name', { ascending: true })
-      .range(offset, offset + limit - 1);
+    // Apply sorting
+    query = query.order('name', { ascending: true });
+
+    // Only apply pagination at database level if we don't need client-side filtering
+    if (!needsClientFilter) {
+      const offset = (page - 1) * limit;
+      query = query.range(offset, offset + limit - 1);
+    }
 
     const { data, error, count } = await query;
 
     if (error) throw error;
 
-    // Client-side filter for low stock (column comparison not supported in Supabase)
     let filteredData = data || [];
+    let totalCount = count || 0;
+
+    // Client-side filter for low stock (column comparison not supported in Supabase)
     if (filters.lowStock) {
       filteredData = filteredData.filter(r => r.total_quantity <= r.minimum_stock);
+      totalCount = filteredData.length;
+      
+      // Apply pagination client-side
+      const offset = (page - 1) * limit;
+      filteredData = filteredData.slice(offset, offset + limit);
     }
-
-    const needsClientFilter = filters.lowStock;
-    const totalCount = needsClientFilter ? filteredData.length : (count || 0);
 
     return {
       success: true,
@@ -512,23 +523,26 @@ export async function getLowStockReagents() {
 
 
 /**
- * Get count of lots that are already expired
+ * Get count of reagents that have at least one expired lot
  */
 export async function getExpiredLotsCount() {
   return withAuth(async (user, supabase) => {
     const today = new Date().toISOString().split('T')[0];
 
-    // head: true returns only the count without fetching actual rows (optimization)
-    const { count, error } = await supabase
+    // Get expired lots and count unique reagent IDs
+    const { data: expiredLots, error } = await supabase
       .from("lots")
-      .select("id", { count: 'exact', head: true })
+      .select("reagent_id")
       .eq("is_active", true)
       .gt("quantity", 0)
       .lt("expiry_date", today);
 
     if (error) throw error;
 
-    return { success: true, count: count || 0 };
+    // Count unique reagents with expired lots
+    const uniqueReagentIds = [...new Set(expiredLots?.map(l => l.reagent_id) || [])];
+
+    return { success: true, count: uniqueReagentIds.length };
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), count: 0 }));
 }
 
