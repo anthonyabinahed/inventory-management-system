@@ -2,15 +2,7 @@
 
 import { withAuth } from "@/libs/auth";
 import { getErrorMessage } from "@/libs/utils";
-
-// ============ CONSTANTS ============
-
-// Fields allowed to be updated on reagents table
-const REAGENT_UPDATABLE_FIELDS = [
-  'name', 'internal_barcode', 'description', 'supplier',
-  'storage_location', 'storage_temperature', 'sector', 'machine',
-  'minimum_stock', 'unit'
-];
+import { reagentSchema, reagentUpdateSchema, stockInSchema, stockOutSchema, validateWithSchema } from "@/libs/schemas";
 
 // ============ HELPER FUNCTIONS ============
 
@@ -162,20 +154,14 @@ export async function getReagentById(id) {
  * New reagents start with total_quantity = 0
  */
 export async function createReagent(reagentData) {
+  const validated = validateWithSchema(reagentSchema, reagentData);
+  if (!validated.success) return validated;
+
   return withAuth(async (user, supabase) => {
     const { data, error } = await supabase
       .from("reagents")
       .insert({
-        name: reagentData.name,
-        internal_barcode: reagentData.internal_barcode,
-        description: reagentData.description || null,
-        supplier: reagentData.supplier,
-        storage_location: reagentData.storage_location,
-        storage_temperature: reagentData.storage_temperature,
-        sector: reagentData.sector,
-        machine: reagentData.machine || null,
-        minimum_stock: reagentData.minimum_stock || 0,
-        unit: reagentData.unit || 'units',
+        ...validated.data,
         total_quantity: 0,  // Starts empty, updated via lots
         created_by: user.id,
         updated_by: user.id
@@ -193,19 +179,14 @@ export async function createReagent(reagentData) {
  * Update an existing reagent (master data only)
  */
 export async function updateReagent(id, updates) {
-  return withAuth(async (user, supabase) => {
-    // Only allow master-level fields to be updated
-    const safeUpdates = {};
-    for (const field of REAGENT_UPDATABLE_FIELDS) {
-      if (updates[field] !== undefined) {
-        safeUpdates[field] = updates[field];
-      }
-    }
+  const validated = validateWithSchema(reagentUpdateSchema, updates);
+  if (!validated.success) return validated;
 
+  return withAuth(async (user, supabase) => {
     const { data, error } = await supabase
       .from("reagents")
       .update({
-        ...safeUpdates,
+        ...validated.data,
         updated_by: user.id
       })
       .eq("id", id)
@@ -275,17 +256,11 @@ export async function getLotsForReagent(reagentId, { includeEmpty = true, includ
  * If lot_number exists for reagent, adds to quantity (keeps original expiry)
  * If new lot_number, creates new lot record
  */
-export async function stockIn({
-  reagent_id,
-  lot_number,
-  quantity,
-  expiry_date,
-  date_of_reception,
-  notes
-}) {
-  if (quantity <= 0) {
-    return { success: false, errorMessage: "Quantity must be greater than 0" };
-  }
+export async function stockIn(params) {
+  const validated = validateWithSchema(stockInSchema, params);
+  if (!validated.success) return validated;
+
+  const { reagent_id, lot_number, quantity, expiry_date, date_of_reception, notes } = validated.data;
 
   return withAuth(async (user, supabase) => {
     // Check if lot already exists for this reagent
@@ -374,10 +349,12 @@ export async function stockIn({
 /**
  * Stock Out - Remove stock from a specific lot
  */
-export async function stockOut(lotId, quantity, { notes } = {}) {
-  if (quantity <= 0) {
-    return { success: false, errorMessage: "Quantity must be greater than 0" };
-  }
+export async function stockOut(lotId, quantity, opts = {}) {
+  const validated = validateWithSchema(stockOutSchema, { quantity, ...opts });
+  if (!validated.success) return validated;
+
+  quantity = validated.data.quantity;
+  const notes = validated.data.notes;
 
   return withAuth(async (user, supabase) => {
     // Get current lot

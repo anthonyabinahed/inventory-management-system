@@ -6,6 +6,7 @@ import { X, Info } from "lucide-react";
 import toast from "react-hot-toast";
 import { createReagent, updateReagent } from "@/actions/inventory";
 import { UNITS } from "@/libs/constants";
+import { reagentSchema } from "@/libs/schemas";
 
 const initialFormData = {
   name: '',
@@ -29,7 +30,6 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
   useEffect(() => {
     if (reagent) {
       setFormData({
-        // TODO: isn't it better if i use something like ZOD so that in the actions i can use the same scheme? no duplications... 
         name: reagent.name || '',
         internal_barcode: reagent.internal_barcode || '',
         description: reagent.description || '',
@@ -48,22 +48,21 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const parsed = reagentSchema.safeParse(formData);
+    if (!parsed.success) {
+      toast.error(parsed.error.errors[0]?.message || "Validation failed");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const dataToSubmit = {
-        ...formData,
-        minimum_stock: parseInt(formData.minimum_stock, 10),
-        // TODO: why only these 2 machine and description are specified here? 
-        machine: formData.machine || null,
-        description: formData.description || null
-      };
-
       let result;
       if (isEditing) {
-        result = await updateReagent(reagent.id, dataToSubmit);
+        result = await updateReagent(reagent.id, parsed.data);
       } else {
-        result = await createReagent(dataToSubmit);
+        result = await createReagent(parsed.data);
       }
 
       if (result.success) {
@@ -85,7 +84,6 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
   };
 
   return (
-    // TODO: what's that transition thing and Fragment ? explain 
     <Transition appear show={isOpen} as={Fragment}>
       <Dialog as="div" className="relative z-50" onClose={onClose}>
         <Transition.Child

@@ -7,6 +7,7 @@ import { Plus, Send, X } from "lucide-react";
 import { getCurrentUser } from "@/actions/auth";
 import { getAllUsers } from "@/actions/users";
 import { inviteUser, revokeUser, updateUserRole } from "@/actions/admin";
+import { inviteUserSchema } from "@/libs/schemas";
 
 export default function UsersManagement() {
   const [users, setUsers] = useState([]);
@@ -58,10 +59,21 @@ export default function UsersManagement() {
 
   const handleInvite = async (e) => {
     e.preventDefault();
+
+    const parsed = inviteUserSchema.safeParse({
+      email: inviteEmail,
+      fullName: inviteName,
+      role: inviteRole,
+    });
+    if (!parsed.success) {
+      toast.error(parsed.error.errors[0]?.message || "Validation failed");
+      return;
+    }
+
     setIsInviting(true);
 
     try {
-      const { success, errorMessage } = await inviteUser(inviteEmail, inviteName, inviteRole);
+      const { success, errorMessage } = await inviteUser(parsed.data.email, parsed.data.fullName, parsed.data.role);
 
       if (!success) throw new Error(errorMessage);
 

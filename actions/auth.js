@@ -5,6 +5,7 @@ import { createSupabaseClient } from "@/libs/supabase/server";
 import { getSupabaseAdmin } from "@/actions/admin";
 import { sendEmail } from "@/libs/resend";
 import { getErrorMessage } from "@/libs/utils";
+import { loginSchema, forgotPasswordSchema, passwordSchema, validateWithSchema } from "@/libs/schemas";
 import config from "@/config";
 
 
@@ -22,9 +23,13 @@ export const getCurrentUser = cache(async () => {
  */
 export async function login(formData) {
     try {
-        const email = formData.get("email");
-        const password = formData.get("password");
+        const validated = validateWithSchema(loginSchema, {
+            email: formData.get("email"),
+            password: formData.get("password"),
+        });
+        if (!validated.success) return validated;
 
+        const { email, password } = validated.data;
         const supabase = await createSupabaseClient();
         const { data, error } = await supabase.auth.signInWithPassword({
             email,
@@ -103,6 +108,11 @@ export async function verifyInviteToken(tokenHash) {
  * Update the current user's password (requires authentication)
  */
 export async function updatePassword(password) {
+    const parsed = passwordSchema.safeParse(password);
+    if (!parsed.success) {
+        return { success: false, errorMessage: parsed.error.errors[0]?.message || "Invalid password" };
+    }
+
     try {
         const user = await getCurrentUser();
         if (!user) {
@@ -110,7 +120,7 @@ export async function updatePassword(password) {
         }
 
         const supabase = await createSupabaseClient();
-        const { error } = await supabase.auth.updateUser({ password });
+        const { error } = await supabase.auth.updateUser({ password: parsed.data });
 
         if (error) throw error;
 
@@ -125,11 +135,10 @@ export async function updatePassword(password) {
  * Uses admin client to generate a recovery link and sends custom email
  */
 export async function requestPasswordReset(email) {
-    try {
-        if (!email) {
-            return { success: false, errorMessage: "Email is required" };
-        }
+    const validated = validateWithSchema(forgotPasswordSchema, { email });
+    if (!validated.success) return validated;
 
+    try {
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
         const supabaseAdmin = await getSupabaseAdmin();
 

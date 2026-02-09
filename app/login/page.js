@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import config from "@/config";
 import { login, getCurrentUser } from "@/actions/auth";
+import { loginSchema } from "@/libs/schemas";
 
 export default function LogIn() {
   const router = useRouter();
@@ -28,6 +29,13 @@ export default function LogIn() {
 
   const handleLogIn = async (e) => {
     e.preventDefault();
+
+    const parsed = loginSchema.safeParse({ email, password });
+    if (!parsed.success) {
+      toast.error(parsed.error.errors[0]?.message || "Validation failed");
+      return;
+    }
+
     setIsLoading(true);
 
     try {

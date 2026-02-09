@@ -6,6 +6,7 @@ import { X, Minus } from "lucide-react";
 import toast from "react-hot-toast";
 import { stockOut } from "@/actions/inventory";
 import { ExpiryBadge } from "./StatusBadges";
+import { stockOutSchema } from "@/libs/schemas";
 
 export default function LotStockOutModal({ isOpen, onClose, lot, unit, onSaved }) {
   const [quantity, setQuantity] = useState(1);
@@ -26,11 +27,23 @@ export default function LotStockOutModal({ isOpen, onClose, lot, unit, onSaved }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const parsed = stockOutSchema.safeParse({ quantity, notes });
+    if (!parsed.success) {
+      toast.error(parsed.error.errors[0]?.message || "Validation failed");
+      return;
+    }
+
+    if (parsed.data.quantity > lot.quantity) {
+      toast.error(`Cannot exceed current stock (${lot.quantity})`);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const result = await stockOut(lot.id, parseInt(quantity, 10), {
-        notes: notes || undefined
+      const result = await stockOut(lot.id, parsed.data.quantity, {
+        notes: parsed.data.notes
       });
 
       if (result.success) {

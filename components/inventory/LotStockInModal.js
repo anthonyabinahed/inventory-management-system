@@ -5,6 +5,7 @@ import { Dialog, Transition } from "@headlessui/react";
 import { X, Plus, Info } from "lucide-react";
 import toast from "react-hot-toast";
 import { stockIn, checkLotExists } from "@/actions/inventory";
+import { stockInSchema } from "@/libs/schemas";
 
 export default function LotStockInModal({ isOpen, onClose, reagent, existingLots = [], prefilledLot = null, onSaved }) {
   const [lotNumber, setLotNumber] = useState('');
@@ -60,17 +61,26 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const payload = {
+      reagent_id: reagent.id,
+      lot_number: lotNumber,
+      quantity,
+      expiry_date: existingLot ? undefined : expiryDate,
+      date_of_reception: existingLot ? undefined : dateOfReception,
+      notes,
+    };
+
+    const parsed = stockInSchema.safeParse(payload);
+    if (!parsed.success) {
+      toast.error(parsed.error.errors[0]?.message || "Validation failed");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const result = await stockIn({
-        reagent_id: reagent.id,
-        lot_number: lotNumber,
-        quantity: parseInt(quantity, 10),
-        expiry_date: existingLot ? undefined : expiryDate,
-        date_of_reception: existingLot ? undefined : dateOfReception,
-        notes: notes || undefined
-      });
+      const result = await stockIn(parsed.data);
 
       if (result.success) {
         toast.success(result.action === 'created' ? 'New lot created' : 'Stock added to lot');

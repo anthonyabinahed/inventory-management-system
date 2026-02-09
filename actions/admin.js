@@ -5,6 +5,7 @@ import { createSupabaseClient } from "@/libs/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/libs/resend";
 import { getErrorMessage } from "@/libs/utils";
+import { inviteUserSchema, updateUserRoleSchema, validateWithSchema } from "@/libs/schemas";
 import config from "@/config";
 import { getCurrentUser } from "@/actions/auth";
 
@@ -62,15 +63,14 @@ export const verifyAdmin = cache(async () => {
  * Update a user's role (admin only)
  */
 export async function updateUserRole(userId, newRole) {
+    const validated = validateWithSchema(updateUserRoleSchema, { userId, role: newRole });
+    if (!validated.success) return validated;
+
     try {
         const { isAdmin, error: authError } = await verifyAdmin();
-        
+
         if (!isAdmin) {
             return { success: false, errorMessage: authError };
-        }
-
-        if (!["admin", "user"].includes(newRole)) {
-            return { success: false, errorMessage: "Invalid role. Must be 'admin' or 'user'" };
         }
 
         const supabase = await createSupabaseClient();
@@ -91,20 +91,15 @@ export async function updateUserRole(userId, newRole) {
  * Invite a new user (admin only)
  */
 export async function inviteUser(email, fullName = "", role = "user") {
+    const validated = validateWithSchema(inviteUserSchema, { email, fullName, role });
+    if (!validated.success) return validated;
+
     try {
         // Verify requester is admin
         const { isAdmin, error: authError } = await verifyAdmin();
 
         if (!isAdmin) {
             return { success: false, errorMessage: authError };
-        }
-
-        if (!email) {
-            return { success: false, errorMessage: "Email is required" };
-        }
-
-        if (!["admin", "user"].includes(role)) {
-            return { success: false, errorMessage: "Invalid role. Must be 'admin' or 'user'" };
         }
 
         const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;

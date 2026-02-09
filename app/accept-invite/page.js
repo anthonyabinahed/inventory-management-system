@@ -11,6 +11,7 @@ import {
   updatePassword,
   signOut
 } from "@/actions/auth";
+import { setPasswordSchema } from "@/libs/schemas";
 
 function AcceptInviteForm() {
   const router = useRouter();
@@ -98,13 +99,9 @@ function AcceptInviteForm() {
   const handleSetPassword = async (e) => {
     e.preventDefault();
 
-    if (password !== confirmPassword) {
-      toast.error("Passwords do not match");
-      return;
-    }
-
-    if (password.length < 8) {
-      toast.error("Password must be at least 8 characters");
+    const parsed = setPasswordSchema.safeParse({ password, confirmPassword });
+    if (!parsed.success) {
+      toast.error(parsed.error.errors[0]?.message || "Validation failed");
       return;
     }
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { requestPasswordReset } from "@/actions/auth";
+import { forgotPasswordSchema } from "@/libs/schemas";
 import config from "@/config";
 
 export default function ForgotPassword() {
@@ -13,10 +14,17 @@ export default function ForgotPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const parsed = forgotPasswordSchema.safeParse({ email });
+    if (!parsed.success) {
+      toast.error(parsed.error.errors[0]?.message || "Validation failed");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const { errorMessage } = await requestPasswordReset(email);
+      const { errorMessage } = await requestPasswordReset(parsed.data.email);
 
       if (errorMessage) {
         throw new Error(errorMessage);
