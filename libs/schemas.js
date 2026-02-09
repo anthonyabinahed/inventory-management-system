@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { UNITS } from "@/libs/constants";
+import { UNITS, CATEGORIES } from "@/libs/constants";
 
-// Derive valid unit values from the UNITS constant (single source of truth)
+// Derive valid values from constants (single source of truth)
 const UNIT_VALUES = UNITS.map(u => u.value);
+const CATEGORY_VALUES = CATEGORIES.map(c => c.value);
 
 // ============ HELPERS ============
 
@@ -37,9 +38,10 @@ export function validateWithSchema(schema, data) {
 
 export const reagentSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  internal_barcode: z.string().min(1, "Internal barcode is required"),
+  reference: z.string().min(1, "Reference is required"),
   description: optionalNullString,
   supplier: z.string().min(1, "Supplier is required"),
+  category: z.enum(CATEGORY_VALUES, { errorMap: () => ({ message: "Invalid category" }) }).default("reagent"),
   minimum_stock: z.coerce.number().int().min(0, "Minimum stock must be 0 or greater").default(0),
   unit: z.enum(UNIT_VALUES, { errorMap: () => ({ message: "Invalid unit" }) }).default("units"),
   storage_location: z.string().min(1, "Storage location is required"),

@@ -9,6 +9,15 @@ export const UNITS = [
   { value: 'boxes', label: 'Boxes' },
   { value: 'units', label: 'Units' },
   { value: 'strips', label: 'Strips' },
+  { value: 'pieces', label: 'Pieces' },
+];
+
+export const CATEGORIES = [
+  { value: 'reagent', label: 'Reagent' },
+  { value: 'control', label: 'Control' },
+  { value: 'calibrator', label: 'Calibrator' },
+  { value: 'consumable', label: 'Consumable' },
+  { value: 'solution', label: 'Solution' },
 ];
 
 export const MOVEMENT_TYPES = [
@@ -28,6 +37,8 @@ export const EXPIRY_THRESHOLDS = {
 
 // Helper functions for status calculations
 export function getExpiryStatus(expiryDate) {
+  if (!expiryDate) return { status: 'none', daysUntil: null, color: 'default' };
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const expiry = new Date(expiryDate);

@@ -7,14 +7,15 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
 import { createReagent, updateReagent } from "@/actions/inventory";
-import { UNITS } from "@/libs/constants";
+import { UNITS, CATEGORIES } from "@/libs/constants";
 import { reagentSchema } from "@/libs/schemas";
 
 const defaultValues = {
   name: '',
-  internal_barcode: '',
+  reference: '',
   description: '',
   supplier: '',
+  category: 'reagent',
   minimum_stock: 0,
   unit: 'units',
   storage_location: '',
@@ -23,8 +24,8 @@ const defaultValues = {
   machine: ''
 };
 
-export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
-  const isEditing = !!reagent;
+export default function ReagentModal({ isOpen, onClose, reagent, onSaved, viewOnly = false }) {
+  const isEditing = !!reagent && !viewOnly;
 
   const {
     register,
@@ -40,9 +41,10 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
     if (reagent) {
       reset({
         name: reagent.name || '',
-        internal_barcode: reagent.internal_barcode || '',
+        reference: reagent.reference || '',
         description: reagent.description || '',
         supplier: reagent.supplier || '',
+        category: reagent.category || 'reagent',
         minimum_stock: reagent.minimum_stock || 0,
         unit: reagent.unit || 'units',
         storage_location: reagent.storage_location || '',
@@ -105,7 +107,7 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                 {/* Header */}
                 <div className="flex justify-between items-center px-6 py-4 border-b border-base-300">
                   <Dialog.Title as="h3" className="text-lg font-semibold">
-                    {isEditing ? 'Edit Reagent' : 'Add New Reagent'}
+                    {viewOnly ? 'Item Details' : isEditing ? 'Edit' : 'Add New'}
                   </Dialog.Title>
                   <button
                     className="btn btn-ghost btn-sm btn-square"
@@ -116,20 +118,33 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                 </div>
 
                 {/* Info banner for new reagents */}
-                {!isEditing && (
+                {!isEditing && !viewOnly && (
                   <div className="px-6 py-3 bg-info/10 border-b border-info/20">
                     <div className="flex items-start gap-2 text-sm text-info-content">
                       <Info className="w-4 h-4 mt-0.5 shrink-0" />
                       <p>
-                        New reagents start with zero stock. After creating the reagent,
+                        New items start with zero stock. After creating the item,
                         expand its row and click "Add Stock" to add lots with quantities and expiry dates.
                       </p>
                     </div>
                   </div>
                 )}
 
+                {/* Stock summary in view mode */}
+                {viewOnly && reagent && (
+                  <div className="px-6 py-3 bg-base-200">
+                    <p className="text-sm text-base-content/70">
+                      Total Stock: <span className="font-semibold text-base-content">{reagent.total_quantity} {reagent.unit}</span>
+                      {reagent.minimum_stock > 0 && (
+                        <> • Min: {reagent.minimum_stock}</>
+                      )}
+                    </p>
+                  </div>
+                )}
+
                 {/* Form */}
-                <form onSubmit={handleSubmit(onSubmit)} className="p-6">
+                <form onSubmit={viewOnly ? (e) => e.preventDefault() : handleSubmit(onSubmit)} className="p-6">
+                  <fieldset disabled={viewOnly}>
                   {/* Basic Information */}
                   <h4 className="text-sm font-semibold text-base-content/70 mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
@@ -153,18 +168,18 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
 
                     <div className="form-control">
                       <label className="label">
-                        <span className="label-text font-medium">Internal Barcode / Code</span>
+                        <span className="label-text font-medium">Reference</span>
                         <span className="label-text-alt text-error">*</span>
                       </label>
                       <input
                         type="text"
-                        {...register("internal_barcode")}
-                        className={`input input-bordered w-full font-mono ${errors.internal_barcode ? "input-error" : ""}`}
-                        placeholder="e.g., HEM-001-2024"
+                        {...register("reference")}
+                        className={`input input-bordered w-full font-mono ${errors.reference ? "input-error" : ""}`}
+                        placeholder="e.g., BM0809.075"
                       />
-                      {errors.internal_barcode && (
+                      {errors.reference && (
                         <label className="label">
-                          <span className="label-text-alt text-error">{errors.internal_barcode.message}</span>
+                          <span className="label-text-alt text-error">{errors.reference.message}</span>
                         </label>
                       )}
                     </div>
@@ -198,6 +213,20 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                           <span className="label-text-alt text-error">{errors.supplier.message}</span>
                         </label>
                       )}
+                    </div>
+
+                    <div className="form-control">
+                      <label className="label">
+                        <span className="label-text font-medium">Category</span>
+                      </label>
+                      <select
+                        {...register("category")}
+                        className="select select-bordered w-full"
+                      >
+                        {CATEGORIES.map(c => (
+                          <option key={c.value} value={c.value}>{c.label}</option>
+                        ))}
+                      </select>
                     </div>
 
                     <div className="form-control">
@@ -305,26 +334,40 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                     </div>
                   </div>
 
+                  </fieldset>
+
                   {/* Actions */}
                   <div className="flex gap-3 mt-8 pt-4 border-t border-base-300">
-                    <button
-                      type="button"
-                      className="btn btn-ghost flex-1"
-                      onClick={onClose}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="btn btn-primary flex-1"
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? (
-                        <span className="loading loading-spinner loading-sm" />
-                      ) : (
-                        isEditing ? 'Save Changes' : 'Add Reagent'
-                      )}
-                    </button>
+                    {viewOnly ? (
+                      <button
+                        type="button"
+                        className="btn btn-ghost flex-1"
+                        onClick={onClose}
+                      >
+                        Close
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-ghost flex-1"
+                          onClick={onClose}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="btn btn-primary flex-1"
+                          disabled={isSubmitting}
+                        >
+                          {isSubmitting ? (
+                            <span className="loading loading-spinner loading-sm" />
+                          ) : (
+                            isEditing ? 'Save Changes' : 'Add'
+                          )}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </form>
               </Dialog.Panel>

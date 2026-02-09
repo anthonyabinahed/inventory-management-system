@@ -25,6 +25,7 @@ export function Inventory() {
   // Filter state
   const [filters, setFilters] = useState({
     search: '',
+    category: '',
     sector: '',
     machine: '',
     supplier: '',
@@ -42,6 +43,7 @@ export function Inventory() {
   // Modal state
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingReagent, setEditingReagent] = useState(null);
+  const [viewingReagent, setViewingReagent] = useState(null);
   const [historyReagent, setHistoryReagent] = useState(null);
 
   // Alert counts
@@ -216,7 +218,7 @@ export function Inventory() {
             onClick={() => setShowAddModal(true)}
           >
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Add Reagent</span>
+            <span className="hidden sm:inline">Add</span>
             <span className="sm:hidden">Add</span>
           </button>
         </div>
@@ -227,6 +229,7 @@ export function Inventory() {
         reagents={reagents}
         isFiltering={isFiltering}
         onEdit={setEditingReagent}
+        onViewDetails={setViewingReagent}
         onViewHistory={handleViewHistory}
         onRefresh={handleRefresh}
         onReagentUpdated={handleReagentUpdated}
@@ -247,6 +250,14 @@ export function Inventory() {
         onClose={() => { setShowAddModal(false); setEditingReagent(null); }}
         reagent={editingReagent}
         onSaved={handleReagentSaved}
+      />
+
+      {/* View Details Modal (read-only, reuses ReagentModal) */}
+      <ReagentModal
+        isOpen={!!viewingReagent}
+        onClose={() => setViewingReagent(null)}
+        reagent={viewingReagent}
+        viewOnly
       />
 
       {/* Stock History Modal (reagent-level) */}

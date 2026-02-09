@@ -162,7 +162,7 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
                 <div className="px-6 py-3 bg-base-200">
                   <p className="font-semibold">{reagent.name}</p>
                   <p className="text-sm text-base-content/70">
-                    Code: {reagent.internal_barcode} • Current total: {reagent.total_quantity} {reagent.unit}
+                    Ref: {reagent.reference} • Current total: {reagent.total_quantity} {reagent.unit}
                   </p>
                 </div>
 
@@ -240,7 +240,6 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
                       <div className="form-control mb-4">
                         <label className="label">
                           <span className="label-text font-medium">Expiry Date</span>
-                          <span className="label-text-alt text-error">*</span>
                         </label>
                         <input
                           type="date"

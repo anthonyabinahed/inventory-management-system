@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronRight, ChevronDown, MoreHorizontal, Edit2, Trash2, History } from "lucide-react";
+import { ChevronRight, ChevronDown, MoreHorizontal, Eye, Edit2, Trash2, History } from "lucide-react";
 import toast from "react-hot-toast";
 import { deleteReagent } from "@/actions/inventory";
 import { StockBadge } from "./StatusBadges";
@@ -12,6 +12,7 @@ export default function ReagentRow({
   isExpanded,
   onToggleExpand,
   onEdit,
+  onViewDetails,
   onViewHistory,
   onRefresh
 }) {
@@ -57,15 +58,15 @@ export default function ReagentRow({
       {/* Name + mobile info */}
       <td onClick={onToggleExpand}>
         <div className="font-medium max-w-[150px] sm:max-w-none truncate">{reagent.name}</div>
-        <div className="text-xs opacity-50 md:hidden">{reagent.internal_barcode}</div>
+        <div className="text-xs opacity-50 md:hidden">{reagent.reference}</div>
         {reagent.description && (
           <div className="text-xs opacity-60 truncate max-w-[200px] hidden sm:block">{reagent.description}</div>
         )}
       </td>
 
-      {/* Barcode/Code - hidden on mobile */}
+      {/* Reference - hidden on mobile */}
       <td className="hidden md:table-cell" onClick={onToggleExpand}>
-        <span className="font-mono text-xs">{reagent.internal_barcode}</span>
+        <span className="font-mono text-xs">{reagent.reference}</span>
       </td>
 
       {/* Supplier - hidden on smaller screens */}
@@ -81,13 +82,6 @@ export default function ReagentRow({
       {/* Location - hidden on mobile */}
       <td className="hidden lg:table-cell" onClick={onToggleExpand}>
         <span className="text-sm">{reagent.storage_location}</span>
-      </td>
-
-      {/* Sector - hidden on mobile */}
-      <td className="hidden md:table-cell" onClick={onToggleExpand}>
-        <span className="badge badge-ghost badge-sm capitalize">
-          {reagent.sector}
-        </span>
       </td>
 
       {/* Machine - hidden on smaller screens */}
@@ -107,9 +101,15 @@ export default function ReagentRow({
             </label>
             <ul tabIndex={0} className="dropdown-content z-[1] menu menu-sm p-2 shadow bg-base-100 rounded-box w-44">
               <li>
+                <button onClick={() => onViewDetails(reagent)}>
+                  <Eye className="w-4 h-4" />
+                  View Details
+                </button>
+              </li>
+              <li>
                 <button onClick={() => onEdit(reagent)}>
                   <Edit2 className="w-4 h-4" />
-                  Edit Reagent
+                  Edit
                 </button>
               </li>
               <li>

@@ -57,7 +57,11 @@ export default function LotRow({
 
         {/* Expiry Date */}
         <td>
-          <ExpiryBadge expiryDate={lot.expiry_date} />
+          {lot.expiry_date ? (
+            <ExpiryBadge expiryDate={lot.expiry_date} />
+          ) : (
+            <span className="text-sm text-base-content/40">N/A</span>
+          )}
         </td>
 
         {/* Date Received - hidden on mobile */}

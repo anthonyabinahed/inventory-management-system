@@ -9,6 +9,7 @@ export default function ReagentTable({
   reagents,
   isFiltering,
   onEdit,
+  onViewDetails,
   onViewHistory,
   onRefresh,
   onReagentUpdated,
@@ -43,11 +44,10 @@ export default function ReagentTable({
               <th className="w-10 text-center">#</th>
               <th className="w-8"></th>
               <th>Name</th>
-              <th className="hidden md:table-cell">Code</th>
+              <th className="hidden md:table-cell">Reference</th>
               <th className="hidden xl:table-cell">Supplier</th>
               <th>Total Qty</th>
               <th className="hidden lg:table-cell">Location</th>
-              <th className="hidden md:table-cell">Sector</th>
               <th className="hidden xl:table-cell">Machine</th>
               <th className="text-right">Actions</th>
             </tr>
@@ -61,12 +61,13 @@ export default function ReagentTable({
                   isExpanded={expandedReagentId === reagent.id}
                   onToggleExpand={() => onToggleExpand(reagent.id)}
                   onEdit={onEdit}
+                  onViewDetails={onViewDetails}
                   onViewHistory={onViewHistory}
                   onRefresh={onRefresh}
                 />
                 {expandedReagentId === reagent.id && (
                   <tr>
-                    <td colSpan={10} className="p-0">
+                    <td colSpan={9} className="p-0">
                       <LotsPanel
                         reagent={reagent}
                         onReagentUpdated={onReagentUpdated}

@@ -18,12 +18,17 @@ export default function LotsPanel({ reagent, onReagentUpdated }) {
     loadLots();
   }, [reagent.id]);
 
-  // Sort lots with expired first, then by expiry date ascending
+  // Sort lots: expired first, then by expiry date ascending, no-expiry lots last
   const sortLots = (lotsArray) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     return [...lotsArray].sort((a, b) => {
+      // Lots without expiry go to the end
+      if (!a.expiry_date && !b.expiry_date) return 0;
+      if (!a.expiry_date) return 1;
+      if (!b.expiry_date) return -1;
+
       const expiryA = new Date(a.expiry_date);
       const expiryB = new Date(b.expiry_date);
       const aExpired = expiryA < today;

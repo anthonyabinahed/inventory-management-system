@@ -10,8 +10,8 @@ export const getErrorMessage = (
     // 23505 — unique_violation: parse detail for the specific field
     if (error?.code === '23505') {
         const detail = error.detail || '';
-        if (detail.includes('internal_barcode')) {
-            return "A reagent with this barcode already exists.";
+        if (detail.includes('reference')) {
+            return "An item with this reference already exists.";
         }
         if (detail.includes('lot_number')) {
             return "This lot number already exists for this reagent.";

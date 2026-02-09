@@ -84,6 +84,9 @@ export async function getReagents({
     }
 
     // Apply filters
+    if (filters.category) {
+      query = query.eq("category", filters.category);
+    }
     if (filters.sector) {
       query = query.eq("sector", filters.sector);
     }
@@ -97,7 +100,7 @@ export async function getReagents({
       query = query.ilike("storage_location", `%${filters.storage_location}%`);
     }
     if (filters.search) {
-      query = query.or(`name.ilike.%${filters.search}%,internal_barcode.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+      query = query.or(`name.ilike.%${filters.search}%,reference.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
     }
 
     // Apply sorting (always alphabetical by name) and pagination
@@ -305,17 +308,13 @@ export async function stockIn(params) {
       });
     } else {
       // Create new lot
-      if (!expiry_date) {
-        return { success: false, errorMessage: "Expiry date is required for new lots" };
-      }
-
       const { data, error } = await supabase
         .from("lots")
         .insert({
           reagent_id,
           lot_number,
           quantity,
-          expiry_date,
+          expiry_date: expiry_date || null,
           date_of_reception: date_of_reception || new Date().toISOString().split('T')[0],
           created_by: user.id,
           updated_by: user.id
@@ -540,7 +539,7 @@ export async function getFilterOptions() {
   return withAuth(async (user, supabase) => {
     const { data, error } = await supabase
       .from("reagents")
-      .select("supplier, storage_location, sector, machine")
+      .select("supplier, storage_location, sector, machine, category")
       .eq("is_active", true);
 
     if (error) throw error;
@@ -550,12 +549,13 @@ export async function getFilterOptions() {
     const locations = [...new Set((data || []).map(r => r.storage_location).filter(Boolean))].sort();
     const sectors = [...new Set((data || []).map(r => r.sector).filter(Boolean))].sort();
     const machines = [...new Set((data || []).map(r => r.machine).filter(Boolean))].sort();
+    const categories = [...new Set((data || []).map(r => r.category).filter(Boolean))].sort();
 
     return {
       success: true,
-      data: { suppliers, locations, sectors, machines }
+      data: { suppliers, locations, sectors, machines, categories }
     };
-  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: { suppliers: [], locations: [], sectors: [], machines: [] } }));
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: { suppliers: [], locations: [], sectors: [], machines: [], categories: [] } }));
 }
 
 /**

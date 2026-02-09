@@ -1,14 +1,16 @@
 "use client";
 
 import { Search, X, Filter, AlertTriangle, Clock } from "lucide-react";
+import { CATEGORIES } from "@/libs/constants";
 
 export default function ReagentFilters({ filters, options, alertCounts = {}, onFilterChange }) {
-  const hasActiveFilters = filters.search || filters.sector || filters.machine ||
+  const hasActiveFilters = filters.search || filters.category || filters.sector || filters.machine ||
     filters.supplier || filters.storage_location || filters.lowStock || filters.hasExpiredLots;
 
   const clearFilters = () => {
     onFilterChange({
       search: '',
+      category: '',
       sector: '',
       machine: '',
       supplier: '',
@@ -35,6 +37,18 @@ export default function ReagentFilters({ filters, options, alertCounts = {}, onF
           onChange={(e) => updateFilter('search', e.target.value)}
         />
       </div>
+
+      {/* Category dropdown - hidden on mobile */}
+      <select
+        className="select select-bordered select-sm w-32 hidden sm:inline-flex"
+        value={filters.category}
+        onChange={(e) => updateFilter('category', e.target.value)}
+      >
+        <option value="">All Categories</option>
+        {CATEGORIES.map(c => (
+          <option key={c.value} value={c.value}>{c.label}</option>
+        ))}
+      </select>
 
       {/* Sector dropdown - hidden on mobile, populated from data */}
       <select
@@ -68,6 +82,20 @@ export default function ReagentFilters({ filters, options, alertCounts = {}, onF
         </label>
         <div tabIndex={0} className="dropdown-content z-[1] p-4 shadow bg-base-100 rounded-box w-64">
           <div className="flex flex-col gap-3">
+            <div className="form-control sm:hidden">
+              <label className="label label-text text-xs">Category</label>
+              <select
+                className="select select-bordered select-sm"
+                value={filters.category}
+                onChange={(e) => updateFilter('category', e.target.value)}
+              >
+                <option value="">All Categories</option>
+                {CATEGORIES.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="form-control sm:hidden">
               <label className="label label-text text-xs">Sector</label>
               <select
