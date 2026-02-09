@@ -2,6 +2,8 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
 import config from "@/config";
 import {
@@ -14,12 +16,20 @@ import { setPasswordSchema } from "@/libs/schemas";
 
 function ResetPasswordForm() {
   const router = useRouter();
-
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState(null);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(setPasswordSchema),
+    defaultValues: {
+      password: "",
+      confirmPassword: "",
+    },
+  });
 
   useEffect(() => {
     const verifyRecoveryLink = async () => {
@@ -73,19 +83,9 @@ function ResetPasswordForm() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    const parsed = setPasswordSchema.safeParse({ password, confirmPassword });
-    if (!parsed.success) {
-      toast.error(parsed.error.errors[0]?.message || "Validation failed");
-      return;
-    }
-
-    setIsLoading(true);
-
+  const onSubmit = async (data) => {
     try {
-      const { errorMessage } = await updatePassword(password);
+      const { errorMessage } = await updatePassword(data.password);
 
       if (errorMessage) throw new Error(errorMessage);
 
@@ -97,8 +97,6 @@ function ResetPasswordForm() {
       router.push(config.routes.login);
     } catch (error) {
       toast.error(error.message || "Failed to update password");
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -153,21 +151,23 @@ function ResetPasswordForm() {
             Choose a strong password for your account
           </p>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="form-control">
               <label className="label">
                 <span className="label-text">New Password</span>
               </label>
               <input
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input input-bordered w-full"
+                {...register("password")}
+                className={`input input-bordered w-full ${errors.password ? "input-error" : ""}`}
                 placeholder="At least 8 characters"
-                required
-                minLength={8}
                 autoComplete="new-password"
               />
+              {errors.password && (
+                <label className="label">
+                  <span className="label-text-alt text-error">{errors.password.message}</span>
+                </label>
+              )}
             </div>
 
             <div className="form-control">
@@ -176,21 +176,24 @@ function ResetPasswordForm() {
               </label>
               <input
                 type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="input input-bordered w-full"
+                {...register("confirmPassword")}
+                className={`input input-bordered w-full ${errors.confirmPassword ? "input-error" : ""}`}
                 placeholder="Confirm your password"
-                required
                 autoComplete="new-password"
               />
+              {errors.confirmPassword && (
+                <label className="label">
+                  <span className="label-text-alt text-error">{errors.confirmPassword.message}</span>
+                </label>
+              )}
             </div>
 
             <button
               type="submit"
               className="btn btn-primary w-full"
-              disabled={isLoading}
+              disabled={isSubmitting}
             >
-              {isLoading && (
+              {isSubmitting && (
                 <span className="loading loading-spinner loading-xs"></span>
               )}
               Update Password

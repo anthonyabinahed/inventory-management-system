@@ -1,49 +1,56 @@
 "use client";
 
-import { Fragment, useState, useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { X, Minus } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
 import { stockOut } from "@/actions/inventory";
 import { ExpiryBadge } from "./StatusBadges";
 import { stockOutSchema } from "@/libs/schemas";
 
 export default function LotStockOutModal({ isOpen, onClose, lot, unit, onSaved }) {
-  const [quantity, setQuantity] = useState(1);
-  const [notes, setNotes] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    watch,
+    reset,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(stockOutSchema),
+    defaultValues: {
+      quantity: 1,
+      notes: '',
+    },
+  });
+
+  const quantity = watch("quantity");
 
   // Reset form when modal opens
   useEffect(() => {
     if (isOpen && lot) {
-      setQuantity(1);
-      setNotes('');
+      reset({
+        quantity: 1,
+        notes: '',
+      });
     }
-  }, [isOpen, lot]);
+  }, [isOpen, lot, reset]);
 
   if (!lot) return null;
 
-  const previewQuantity = lot.quantity - quantity;
+  const previewQuantity = lot.quantity - (quantity || 0);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    const parsed = stockOutSchema.safeParse({ quantity, notes });
-    if (!parsed.success) {
-      toast.error(parsed.error.errors[0]?.message || "Validation failed");
-      return;
-    }
-
-    if (parsed.data.quantity > lot.quantity) {
+  const onSubmit = async (data) => {
+    if (data.quantity > lot.quantity) {
       toast.error(`Cannot exceed current stock (${lot.quantity})`);
       return;
     }
 
-    setIsSubmitting(true);
-
     try {
-      const result = await stockOut(lot.id, parsed.data.quantity, {
-        notes: parsed.data.notes
+      const result = await stockOut(lot.id, data.quantity, {
+        notes: data.notes
       });
 
       if (result.success) {
@@ -54,8 +61,6 @@ export default function LotStockOutModal({ isOpen, onClose, lot, unit, onSaved }
       }
     } catch (error) {
       toast.error("Failed to remove stock");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -114,7 +119,7 @@ export default function LotStockOutModal({ isOpen, onClose, lot, unit, onSaved }
                 </div>
 
                 {/* Form */}
-                <form onSubmit={handleSubmit} className="p-6">
+                <form onSubmit={handleSubmit(onSubmit)} className="p-6">
                   {/* Quantity */}
                   <div className="form-control mb-4">
                     <label className="label">
@@ -124,16 +129,19 @@ export default function LotStockOutModal({ isOpen, onClose, lot, unit, onSaved }
                     <div className="join">
                       <input
                         type="number"
+                        {...register("quantity", { valueAsNumber: true })}
                         min="1"
                         max={lot.quantity}
-                        className="input input-bordered w-full join-item"
-                        value={quantity}
-                        onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 0)}
-                        required
+                        className={`input input-bordered w-full join-item ${errors.quantity ? "input-error" : ""}`}
                       />
                       <span className="btn btn-disabled join-item">{unit}</span>
                     </div>
-                    {quantity > lot.quantity && (
+                    {errors.quantity && (
+                      <label className="label">
+                        <span className="label-text-alt text-error">{errors.quantity.message}</span>
+                      </label>
+                    )}
+                    {quantity > lot.quantity && !errors.quantity && (
                       <label className="label">
                         <span className="label-text-alt text-error">Cannot exceed current stock ({lot.quantity})</span>
                       </label>
@@ -147,7 +155,7 @@ export default function LotStockOutModal({ isOpen, onClose, lot, unit, onSaved }
                         key={n}
                         type="button"
                         className={`btn btn-sm ${quantity === n ? 'btn-primary' : 'btn-outline'}`}
-                        onClick={() => setQuantity(n)}
+                        onClick={() => setValue("quantity", n)}
                       >
                         {n}
                       </button>
@@ -156,7 +164,7 @@ export default function LotStockOutModal({ isOpen, onClose, lot, unit, onSaved }
                       <button
                         type="button"
                         className={`btn btn-sm ${quantity === lot.quantity ? 'btn-primary' : 'btn-outline'}`}
-                        onClick={() => setQuantity(lot.quantity)}
+                        onClick={() => setValue("quantity", lot.quantity)}
                       >
                         All ({lot.quantity})
                       </button>
@@ -170,10 +178,9 @@ export default function LotStockOutModal({ isOpen, onClose, lot, unit, onSaved }
                       <span className="label-text-alt">(optional)</span>
                     </label>
                     <textarea
+                      {...register("notes")}
                       className="textarea textarea-bordered w-full"
                       placeholder="Optional notes..."
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
                       rows={2}
                     />
                   </div>
@@ -181,7 +188,7 @@ export default function LotStockOutModal({ isOpen, onClose, lot, unit, onSaved }
                   {/* Preview */}
                   <div className={`alert py-3 mb-4 ${previewQuantity === 0 ? 'alert-error' : 'alert-warning'}`}>
                     <span>
-                      Remaining: <strong>{previewQuantity} {unit}</strong>
+                      Remaining: <strong>{Math.max(0, previewQuantity)} {unit}</strong>
                       {previewQuantity === 0 && ' (lot will be empty)'}
                     </span>
                   </div>
@@ -198,7 +205,7 @@ export default function LotStockOutModal({ isOpen, onClose, lot, unit, onSaved }
                     <button
                       type="submit"
                       className="btn btn-warning flex-1"
-                      disabled={isSubmitting || quantity <= 0 || quantity > lot.quantity}
+                      disabled={isSubmitting || quantity > lot.quantity}
                     >
                       {isSubmitting ? (
                         <span className="loading loading-spinner loading-sm" />

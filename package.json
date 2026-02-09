@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@headlessui/react": "^2.2.0",
+    "@hookform/resolvers": "^5.2.2",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.46.2",
     "axios": "^1.7.9",
@@ -27,6 +28,7 @@
     "nodemailer": "^7.0.13",
     "react": "19.0.0",
     "react-dom": "19.0.0",
+    "react-hook-form": "^7.71.1",
     "react-hot-toast": "^2.4.1",
     "react-tooltip": "^5.28.0",
     "resend": "^4.0.1",

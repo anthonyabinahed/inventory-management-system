@@ -3,37 +3,64 @@
 import { Fragment, useState, useEffect } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { X, Plus, Info } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
 import { stockIn, checkLotExists } from "@/actions/inventory";
 import { stockInSchema } from "@/libs/schemas";
 
 export default function LotStockInModal({ isOpen, onClose, reagent, existingLots = [], prefilledLot = null, onSaved }) {
-  const [lotNumber, setLotNumber] = useState('');
-  const [quantity, setQuantity] = useState(1);
-  const [expiryDate, setExpiryDate] = useState('');
-  const [dateOfReception, setDateOfReception] = useState(new Date().toISOString().split('T')[0]);
-  const [notes, setNotes] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [existingLot, setExistingLot] = useState(null);
   const [isCheckingLot, setIsCheckingLot] = useState(false);
 
+  const {
+    register,
+    handleSubmit,
+    watch,
+    reset,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(stockInSchema),
+    defaultValues: {
+      reagent_id: reagent?.id,
+      lot_number: '',
+      quantity: 1,
+      expiry_date: '',
+      date_of_reception: new Date().toISOString().split('T')[0],
+      notes: '',
+    },
+  });
+
+  const lotNumber = watch("lot_number");
+  const quantity = watch("quantity");
+
   // Reset form when modal opens
   useEffect(() => {
-    if (isOpen) {
-      // If prefilled lot is provided, use it
+    if (isOpen && reagent) {
       if (prefilledLot) {
-        setLotNumber(prefilledLot.lot_number);
+        reset({
+          reagent_id: reagent.id,
+          lot_number: prefilledLot.lot_number,
+          quantity: 1,
+          expiry_date: '',
+          date_of_reception: new Date().toISOString().split('T')[0],
+          notes: '',
+        });
         setExistingLot(prefilledLot);
       } else {
-        setLotNumber('');
+        reset({
+          reagent_id: reagent.id,
+          lot_number: '',
+          quantity: 1,
+          expiry_date: '',
+          date_of_reception: new Date().toISOString().split('T')[0],
+          notes: '',
+        });
         setExistingLot(null);
       }
-      setQuantity(1);
-      setExpiryDate('');
-      setDateOfReception(new Date().toISOString().split('T')[0]);
-      setNotes('');
     }
-  }, [isOpen, prefilledLot]);
+  }, [isOpen, prefilledLot, reagent, reset]);
 
   // Check if lot exists when lot number changes
   useEffect(() => {
@@ -59,28 +86,19 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
 
   if (!reagent) return null;
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
+  const onSubmit = async (data) => {
+    // If existing lot, remove expiry_date and date_of_reception from payload
     const payload = {
-      reagent_id: reagent.id,
-      lot_number: lotNumber,
-      quantity,
-      expiry_date: existingLot ? undefined : expiryDate,
-      date_of_reception: existingLot ? undefined : dateOfReception,
-      notes,
+      reagent_id: data.reagent_id,
+      lot_number: data.lot_number,
+      quantity: data.quantity,
+      expiry_date: existingLot ? undefined : data.expiry_date,
+      date_of_reception: existingLot ? undefined : data.date_of_reception,
+      notes: data.notes,
     };
 
-    const parsed = stockInSchema.safeParse(payload);
-    if (!parsed.success) {
-      toast.error(parsed.error.errors[0]?.message || "Validation failed");
-      return;
-    }
-
-    setIsSubmitting(true);
-
     try {
-      const result = await stockIn(parsed.data);
+      const result = await stockIn(payload);
 
       if (result.success) {
         toast.success(result.action === 'created' ? 'New lot created' : 'Stock added to lot');
@@ -90,8 +108,6 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
       }
     } catch (error) {
       toast.error("Failed to add stock");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -151,7 +167,10 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
                 </div>
 
                 {/* Form */}
-                <form onSubmit={handleSubmit} className="p-6">
+                <form onSubmit={handleSubmit(onSubmit)} className="p-6">
+                  {/* Hidden reagent_id */}
+                  <input type="hidden" {...register("reagent_id")} />
+
                   {/* Lot Number with autocomplete */}
                   <div className="form-control mb-4">
                     <label className="label">
@@ -160,12 +179,10 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
                     </label>
                     <input
                       type="text"
-                      className="input input-bordered w-full font-mono"
+                      {...register("lot_number")}
+                      className={`input input-bordered w-full font-mono ${errors.lot_number ? "input-error" : ""}`}
                       placeholder="e.g., LOT-2024-001"
-                      value={lotNumber}
-                      onChange={(e) => setLotNumber(e.target.value)}
                       list="existing-lots"
-                      required
                     />
                     <datalist id="existing-lots">
                       {existingLots.map(lot => (
@@ -175,6 +192,11 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
                     {isCheckingLot && (
                       <label className="label">
                         <span className="label-text-alt">Checking...</span>
+                      </label>
+                    )}
+                    {errors.lot_number && (
+                      <label className="label">
+                        <span className="label-text-alt text-error">{errors.lot_number.message}</span>
                       </label>
                     )}
                   </div>
@@ -199,14 +221,17 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
                     <div className="join">
                       <input
                         type="number"
+                        {...register("quantity", { valueAsNumber: true })}
                         min="1"
-                        className="input input-bordered w-full join-item"
-                        value={quantity}
-                        onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 0)}
-                        required
+                        className={`input input-bordered w-full join-item ${errors.quantity ? "input-error" : ""}`}
                       />
                       <span className="btn btn-disabled join-item">{reagent.unit}</span>
                     </div>
+                    {errors.quantity && (
+                      <label className="label">
+                        <span className="label-text-alt text-error">{errors.quantity.message}</span>
+                      </label>
+                    )}
                   </div>
 
                   {/* Expiry Date - only for new lots */}
@@ -219,11 +244,14 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
                         </label>
                         <input
                           type="date"
-                          className="input input-bordered w-full"
-                          value={expiryDate}
-                          onChange={(e) => setExpiryDate(e.target.value)}
-                          required={!existingLot}
+                          {...register("expiry_date")}
+                          className={`input input-bordered w-full ${errors.expiry_date ? "input-error" : ""}`}
                         />
+                        {errors.expiry_date && (
+                          <label className="label">
+                            <span className="label-text-alt text-error">{errors.expiry_date.message}</span>
+                          </label>
+                        )}
                       </div>
 
                       <div className="form-control mb-4">
@@ -232,9 +260,8 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
                         </label>
                         <input
                           type="date"
+                          {...register("date_of_reception")}
                           className="input input-bordered w-full"
-                          value={dateOfReception}
-                          onChange={(e) => setDateOfReception(e.target.value)}
                         />
                       </div>
                     </>
@@ -247,10 +274,9 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
                       <span className="label-text-alt">(optional)</span>
                     </label>
                     <textarea
+                      {...register("notes")}
                       className="textarea textarea-bordered w-full"
                       placeholder="Optional notes..."
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
                       rows={2}
                     />
                   </div>
@@ -259,9 +285,9 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
                   <div className="alert alert-success py-3 mb-4">
                     <span>
                       {existingLot ? (
-                        <>New lot total: <strong>{existingLot.quantity + quantity} {reagent.unit}</strong></>
+                        <>New lot total: <strong>{existingLot.quantity + (quantity || 0)} {reagent.unit}</strong></>
                       ) : (
-                        <>Creating new lot with <strong>{quantity} {reagent.unit}</strong></>
+                        <>Creating new lot with <strong>{quantity || 0} {reagent.unit}</strong></>
                       )}
                     </span>
                   </div>
@@ -278,7 +304,7 @@ export default function LotStockInModal({ isOpen, onClose, reagent, existingLots
                     <button
                       type="submit"
                       className="btn btn-success flex-1"
-                      disabled={isSubmitting || quantity <= 0 || !lotNumber || (!existingLot && !expiryDate)}
+                      disabled={isSubmitting}
                     >
                       {isSubmitting ? (
                         <span className="loading loading-spinner loading-sm" />

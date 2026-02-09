@@ -2,41 +2,48 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
 import { requestPasswordReset } from "@/actions/auth";
 import { forgotPasswordSchema } from "@/libs/schemas";
 import config from "@/config";
 
 export default function ForgotPassword() {
-  const [email, setEmail] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [isSent, setIsSent] = useState(false);
+  const [sentEmail, setSentEmail] = useState("");
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+    reset,
+  } = useForm({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: {
+      email: "",
+    },
+  });
 
-    const parsed = forgotPasswordSchema.safeParse({ email });
-    if (!parsed.success) {
-      toast.error(parsed.error.errors[0]?.message || "Validation failed");
-      return;
-    }
-
-    setIsLoading(true);
-
+  const onSubmit = async (data) => {
     try {
-      const { errorMessage } = await requestPasswordReset(parsed.data.email);
+      const { errorMessage } = await requestPasswordReset(data.email);
 
       if (errorMessage) {
         throw new Error(errorMessage);
       }
 
+      setSentEmail(data.email);
       setIsSent(true);
       toast.success("Check your email for reset instructions");
     } catch (error) {
       toast.error(error.message || "Failed to send reset email");
-    } finally {
-      setIsLoading(false);
     }
+  };
+
+  const handleTryAgain = () => {
+    setIsSent(false);
+    reset();
   };
 
   if (isSent) {
@@ -66,7 +73,7 @@ export default function ForgotPassword() {
             <h1 className="text-lg font-semibold mb-2">Check Your Email</h1>
             <p className="text-base-content/60 text-sm mb-4">
               We've sent password reset instructions to{" "}
-              <strong>{email}</strong>
+              <strong>{sentEmail}</strong>
             </p>
             <p className="text-xs text-base-content/50 mb-6">
               Didn't receive the email? Check your spam folder or try again.
@@ -74,7 +81,7 @@ export default function ForgotPassword() {
             <div className="flex gap-3 justify-center">
               <button
                 className="btn btn-outline btn-sm"
-                onClick={() => setIsSent(false)}
+                onClick={handleTryAgain}
               >
                 Try Again
               </button>
@@ -113,28 +120,31 @@ export default function ForgotPassword() {
             <p className="text-base-content/60 text-sm">Reset your password</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="form-control">
               <label className="label">
                 <span className="label-text">Email</span>
               </label>
               <input
                 type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input input-bordered w-full"
+                {...register("email")}
+                className={`input input-bordered w-full ${errors.email ? "input-error" : ""}`}
                 placeholder="you@company.com"
-                required
                 autoComplete="email"
               />
+              {errors.email && (
+                <label className="label">
+                  <span className="label-text-alt text-error">{errors.email.message}</span>
+                </label>
+              )}
             </div>
 
             <button
               type="submit"
               className="btn btn-primary w-full"
-              disabled={isLoading}
+              disabled={isSubmitting}
             >
-              {isLoading && (
+              {isSubmitting && (
                 <span className="loading loading-spinner loading-xs"></span>
               )}
               Send Reset Link

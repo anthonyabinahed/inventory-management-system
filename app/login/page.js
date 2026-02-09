@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
 import config from "@/config";
 import { login, getCurrentUser } from "@/actions/auth";
@@ -10,10 +12,19 @@ import { loginSchema } from "@/libs/schemas";
 
 export default function LogIn() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -27,19 +38,12 @@ export default function LogIn() {
     checkAuth();
   }, [router]);
 
-  const handleLogIn = async (e) => {
-    e.preventDefault();
-
-    const parsed = loginSchema.safeParse({ email, password });
-    if (!parsed.success) {
-      toast.error(parsed.error.errors[0]?.message || "Validation failed");
-      return;
-    }
-
-    setIsLoading(true);
-
+  const onSubmit = async (data) => {
     try {
-      const formData = new FormData(e.target);
+      const formData = new FormData();
+      formData.append("email", data.email);
+      formData.append("password", data.password);
+
       const { errorMessage, isAdmin } = await login(formData);
 
       if (errorMessage) {
@@ -55,8 +59,6 @@ export default function LogIn() {
       toast.success("Welcome back");
     } catch (error) {
       toast.error(error.message);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -80,21 +82,23 @@ export default function LogIn() {
         <div className="card-body">
           <p className="text-center text-base-content/60 text-sm mb-6">Sign in to continue</p>
 
-          <form onSubmit={handleLogIn} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="form-control">
               <label className="label">
                 <span className="label-text">Email</span>
               </label>
               <input
                 type="email"
-                name="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input input-bordered w-full"
+                {...register("email")}
+                className={`input input-bordered w-full ${errors.email ? "input-error" : ""}`}
                 placeholder="you@company.com"
-                required
                 autoComplete="email"
               />
+              {errors.email && (
+                <label className="label">
+                  <span className="label-text-alt text-error">{errors.email.message}</span>
+                </label>
+              )}
             </div>
 
             <div className="form-control">
@@ -103,22 +107,24 @@ export default function LogIn() {
               </label>
               <input
                 type="password"
-                name="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input input-bordered w-full"
+                {...register("password")}
+                className={`input input-bordered w-full ${errors.password ? "input-error" : ""}`}
                 placeholder="Enter your password"
-                required
                 autoComplete="current-password"
               />
+              {errors.password && (
+                <label className="label">
+                  <span className="label-text-alt text-error">{errors.password.message}</span>
+                </label>
+              )}
             </div>
 
             <button
               type="submit"
               className="btn btn-primary w-full"
-              disabled={isLoading}
+              disabled={isSubmitting}
             >
-              {isLoading && (
+              {isSubmitting && (
                 <span className="loading loading-spinner loading-xs"></span>
               )}
               Sign In

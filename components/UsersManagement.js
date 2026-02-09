@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef, Fragment } from "react";
 import { Dialog, Transition } from "@headlessui/react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
 import { Plus, Send, X } from "lucide-react";
 import { getCurrentUser } from "@/actions/auth";
@@ -20,10 +22,21 @@ export default function UsersManagement() {
 
   // Invite modal state
   const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteName, setInviteName] = useState("");
-  const [inviteRole, setInviteRole] = useState("user");
-  const [isInviting, setIsInviting] = useState(false);
+
+  // React Hook Form for invite
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting: isInviting },
+  } = useForm({
+    resolver: zodResolver(inviteUserSchema),
+    defaultValues: {
+      email: "",
+      fullName: "",
+      role: "user",
+    },
+  });
 
   // Prevent duplicate fetches from StrictMode
   const hasFetched = useRef(false);
@@ -57,39 +70,27 @@ export default function UsersManagement() {
     }
   };
 
-  const handleInvite = async (e) => {
-    e.preventDefault();
-
-    const parsed = inviteUserSchema.safeParse({
-      email: inviteEmail,
-      fullName: inviteName,
-      role: inviteRole,
-    });
-    if (!parsed.success) {
-      toast.error(parsed.error.errors[0]?.message || "Validation failed");
-      return;
-    }
-
-    setIsInviting(true);
-
+  const onInviteSubmit = async (data) => {
     try {
-      const { success, errorMessage } = await inviteUser(parsed.data.email, parsed.data.fullName, parsed.data.role);
+      const { success, errorMessage } = await inviteUser(data.email, data.fullName, data.role);
 
       if (!success) throw new Error(errorMessage);
 
-      toast.success(`Invitation sent to ${inviteEmail}`);
+      toast.success(`Invitation sent to ${data.email}`);
       setShowInviteModal(false);
-      setInviteEmail("");
-      setInviteName("");
-      setInviteRole("user");
+      reset();
 
       // Refresh user list
       loadData();
     } catch (error) {
       toast.error(error.message || "Failed to send invitation");
-    } finally {
-      setIsInviting(false);
     }
+  };
+
+  // Reset form when modal closes
+  const handleCloseInviteModal = () => {
+    setShowInviteModal(false);
+    reset();
   };
 
   const handleRevokeAccess = async (userId, email) => {
@@ -256,7 +257,7 @@ export default function UsersManagement() {
         <Dialog
           as="div"
           className="relative z-50"
-          onClose={() => setShowInviteModal(false)}
+          onClose={handleCloseInviteModal}
         >
           <Transition.Child
             as={Fragment}
@@ -289,14 +290,14 @@ export default function UsersManagement() {
                     </Dialog.Title>
                     <button
                       className="btn btn-ghost btn-sm btn-square"
-                      onClick={() => setShowInviteModal(false)}
+                      onClick={handleCloseInviteModal}
                     >
                       <X className="w-5 h-5" />
                     </button>
                   </div>
 
                   {/* Form */}
-                  <form onSubmit={handleInvite} className="p-6">
+                  <form onSubmit={handleSubmit(onInviteSubmit)} className="p-6">
                     <div className="space-y-4">
                       {/* Email Field */}
                       <div className="form-control">
@@ -306,13 +307,16 @@ export default function UsersManagement() {
                         </label>
                         <input
                           type="email"
-                          value={inviteEmail}
-                          onChange={(e) => setInviteEmail(e.target.value)}
-                          className="input input-bordered w-full"
+                          {...register("email")}
+                          className={`input input-bordered w-full ${errors.email ? "input-error" : ""}`}
                           placeholder="colleague@company.com"
-                          required
                           autoComplete="email"
                         />
+                        {errors.email && (
+                          <label className="label">
+                            <span className="label-text-alt text-error">{errors.email.message}</span>
+                          </label>
+                        )}
                       </div>
 
                       {/* Name Field */}
@@ -323,13 +327,16 @@ export default function UsersManagement() {
                         </label>
                         <input
                           type="text"
-                          value={inviteName}
-                          onChange={(e) => setInviteName(e.target.value)}
-                          className="input input-bordered w-full"
+                          {...register("fullName")}
+                          className={`input input-bordered w-full ${errors.fullName ? "input-error" : ""}`}
                           placeholder="John Doe"
-                          required
                           autoComplete="name"
                         />
+                        {errors.fullName && (
+                          <label className="label">
+                            <span className="label-text-alt text-error">{errors.fullName.message}</span>
+                          </label>
+                        )}
                       </div>
 
                       {/* Role Field */}
@@ -338,8 +345,7 @@ export default function UsersManagement() {
                           <span className="label-text font-medium">Role</span>
                         </label>
                         <select
-                          value={inviteRole}
-                          onChange={(e) => setInviteRole(e.target.value)}
+                          {...register("role")}
                           className="select select-bordered w-full"
                         >
                           <option value="user">User</option>
@@ -358,7 +364,7 @@ export default function UsersManagement() {
                       <button
                         type="button"
                         className="btn btn-ghost flex-1"
-                        onClick={() => setShowInviteModal(false)}
+                        onClick={handleCloseInviteModal}
                       >
                         Cancel
                       </button>

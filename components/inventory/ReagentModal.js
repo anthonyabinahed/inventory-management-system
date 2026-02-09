@@ -1,14 +1,16 @@
 "use client";
 
-import { Fragment, useState, useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { Dialog, Transition } from "@headlessui/react";
 import { X, Info } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
 import { createReagent, updateReagent } from "@/actions/inventory";
 import { UNITS } from "@/libs/constants";
 import { reagentSchema } from "@/libs/schemas";
 
-const initialFormData = {
+const defaultValues = {
   name: '',
   internal_barcode: '',
   description: '',
@@ -22,14 +24,21 @@ const initialFormData = {
 };
 
 export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
-  const [formData, setFormData] = useState(initialFormData);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   const isEditing = !!reagent;
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(reagentSchema),
+    defaultValues,
+  });
 
   useEffect(() => {
     if (reagent) {
-      setFormData({
+      reset({
         name: reagent.name || '',
         internal_barcode: reagent.internal_barcode || '',
         description: reagent.description || '',
@@ -42,27 +51,17 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
         machine: reagent.machine || ''
       });
     } else {
-      setFormData(initialFormData);
+      reset(defaultValues);
     }
-  }, [reagent, isOpen]);
+  }, [reagent, isOpen, reset]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    const parsed = reagentSchema.safeParse(formData);
-    if (!parsed.success) {
-      toast.error(parsed.error.errors[0]?.message || "Validation failed");
-      return;
-    }
-
-    setIsSubmitting(true);
-
+  const onSubmit = async (data) => {
     try {
       let result;
       if (isEditing) {
-        result = await updateReagent(reagent.id, parsed.data);
+        result = await updateReagent(reagent.id, data);
       } else {
-        result = await createReagent(parsed.data);
+        result = await createReagent(data);
       }
 
       if (result.success) {
@@ -73,14 +72,7 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
       }
     } catch (error) {
       toast.error("Failed to save reagent");
-    } finally {
-      setIsSubmitting(false);
     }
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   return (
@@ -137,7 +129,7 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                 )}
 
                 {/* Form */}
-                <form onSubmit={handleSubmit} className="p-6">
+                <form onSubmit={handleSubmit(onSubmit)} className="p-6">
                   {/* Basic Information */}
                   <h4 className="text-sm font-semibold text-base-content/70 mb-3">Basic Information</h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
@@ -148,13 +140,15 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                       </label>
                       <input
                         type="text"
-                        name="name"
-                        className="input input-bordered w-full"
+                        {...register("name")}
+                        className={`input input-bordered w-full ${errors.name ? "input-error" : ""}`}
                         placeholder="e.g., CBC Diluent"
-                        value={formData.name}
-                        onChange={handleChange}
-                        required
                       />
+                      {errors.name && (
+                        <label className="label">
+                          <span className="label-text-alt text-error">{errors.name.message}</span>
+                        </label>
+                      )}
                     </div>
 
                     <div className="form-control">
@@ -164,13 +158,15 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                       </label>
                       <input
                         type="text"
-                        name="internal_barcode"
-                        className="input input-bordered w-full font-mono"
+                        {...register("internal_barcode")}
+                        className={`input input-bordered w-full font-mono ${errors.internal_barcode ? "input-error" : ""}`}
                         placeholder="e.g., HEM-001-2024"
-                        value={formData.internal_barcode}
-                        onChange={handleChange}
-                        required
                       />
+                      {errors.internal_barcode && (
+                        <label className="label">
+                          <span className="label-text-alt text-error">{errors.internal_barcode.message}</span>
+                        </label>
+                      )}
                     </div>
 
                     <div className="form-control sm:col-span-2">
@@ -179,11 +175,9 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                         <span className="label-text-alt">(optional)</span>
                       </label>
                       <textarea
-                        name="description"
+                        {...register("description")}
                         className="textarea textarea-bordered w-full"
                         placeholder="Optional description for this reagent..."
-                        value={formData.description}
-                        onChange={handleChange}
                         rows={2}
                       />
                     </div>
@@ -195,13 +189,15 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                       </label>
                       <input
                         type="text"
-                        name="supplier"
-                        className="input input-bordered w-full"
+                        {...register("supplier")}
+                        className={`input input-bordered w-full ${errors.supplier ? "input-error" : ""}`}
                         placeholder="e.g., Beckman Coulter"
-                        value={formData.supplier}
-                        onChange={handleChange}
-                        required
                       />
+                      {errors.supplier && (
+                        <label className="label">
+                          <span className="label-text-alt text-error">{errors.supplier.message}</span>
+                        </label>
+                      )}
                     </div>
 
                     <div className="form-control">
@@ -209,10 +205,8 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                         <span className="label-text font-medium">Unit</span>
                       </label>
                       <select
-                        name="unit"
+                        {...register("unit")}
                         className="select select-bordered w-full"
-                        value={formData.unit}
-                        onChange={handleChange}
                       >
                         {UNITS.map(u => (
                           <option key={u.value} value={u.value}>{u.label}</option>
@@ -230,11 +224,9 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                       </label>
                       <input
                         type="number"
-                        name="minimum_stock"
+                        {...register("minimum_stock", { valueAsNumber: true })}
                         min="0"
                         className="input input-bordered w-full"
-                        value={formData.minimum_stock}
-                        onChange={handleChange}
                       />
                       <label className="label">
                         <span className="label-text-alt">Alert when total stock falls below this level</span>
@@ -252,13 +244,15 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                       </label>
                       <input
                         type="text"
-                        name="storage_location"
-                        className="input input-bordered w-full"
+                        {...register("storage_location")}
+                        className={`input input-bordered w-full ${errors.storage_location ? "input-error" : ""}`}
                         placeholder="e.g., Fridge A - Shelf 2"
-                        value={formData.storage_location}
-                        onChange={handleChange}
-                        required
                       />
+                      {errors.storage_location && (
+                        <label className="label">
+                          <span className="label-text-alt text-error">{errors.storage_location.message}</span>
+                        </label>
+                      )}
                     </div>
 
                     <div className="form-control">
@@ -268,13 +262,15 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                       </label>
                       <input
                         type="text"
-                        name="storage_temperature"
-                        className="input input-bordered w-full"
+                        {...register("storage_temperature")}
+                        className={`input input-bordered w-full ${errors.storage_temperature ? "input-error" : ""}`}
                         placeholder="e.g., 2-8°C"
-                        value={formData.storage_temperature}
-                        onChange={handleChange}
-                        required
                       />
+                      {errors.storage_temperature && (
+                        <label className="label">
+                          <span className="label-text-alt text-error">{errors.storage_temperature.message}</span>
+                        </label>
+                      )}
                     </div>
 
                     <div className="form-control">
@@ -284,13 +280,15 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                       </label>
                       <input
                         type="text"
-                        name="sector"
-                        className="input input-bordered w-full"
+                        {...register("sector")}
+                        className={`input input-bordered w-full ${errors.sector ? "input-error" : ""}`}
                         placeholder="e.g., Hematology"
-                        value={formData.sector}
-                        onChange={handleChange}
-                        required
                       />
+                      {errors.sector && (
+                        <label className="label">
+                          <span className="label-text-alt text-error">{errors.sector.message}</span>
+                        </label>
+                      )}
                     </div>
 
                    <div className="form-control">
@@ -300,11 +298,9 @@ export default function ReagentModal({ isOpen, onClose, reagent, onSaved }) {
                       </label>
                       <input
                         type="text"
-                        name="machine"
+                        {...register("machine")}
                         className="input input-bordered w-full"
                         placeholder="e.g., Sysmex XN"
-                        value={formData.machine}
-                        onChange={handleChange}
                       />
                     </div>
                   </div>

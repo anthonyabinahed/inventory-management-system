@@ -2,6 +2,8 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
 import config from "@/config";
 import {
@@ -17,12 +19,21 @@ function AcceptInviteForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const [isVerifying, setIsVerifying] = useState(true);
   const [error, setError] = useState(null);
   const [userEmail, setUserEmail] = useState("");
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(setPasswordSchema),
+    defaultValues: {
+      password: "",
+      confirmPassword: "",
+    },
+  });
 
   useEffect(() => {
     const verifyInvitation = async () => {
@@ -96,19 +107,9 @@ function AcceptInviteForm() {
     return () => clearTimeout(timer);
   }, [searchParams]);
 
-  const handleSetPassword = async (e) => {
-    e.preventDefault();
-
-    const parsed = setPasswordSchema.safeParse({ password, confirmPassword });
-    if (!parsed.success) {
-      toast.error(parsed.error.errors[0]?.message || "Validation failed");
-      return;
-    }
-
-    setIsLoading(true);
-
+  const onSubmit = async (data) => {
     try {
-      const { errorMessage } = await updatePassword(password);
+      const { errorMessage } = await updatePassword(data.password);
 
       if (errorMessage) throw new Error(errorMessage);
 
@@ -120,8 +121,6 @@ function AcceptInviteForm() {
       router.push(config.routes.login);
     } catch (error) {
       toast.error(error.message || "Failed to set password");
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -181,21 +180,23 @@ function AcceptInviteForm() {
             </p>
           )}
 
-          <form onSubmit={handleSetPassword} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="form-control">
               <label className="label">
                 <span className="label-text">New Password</span>
               </label>
               <input
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input input-bordered w-full"
+                {...register("password")}
+                className={`input input-bordered w-full ${errors.password ? "input-error" : ""}`}
                 placeholder="At least 8 characters"
-                required
-                minLength={8}
                 autoComplete="new-password"
               />
+              {errors.password && (
+                <label className="label">
+                  <span className="label-text-alt text-error">{errors.password.message}</span>
+                </label>
+              )}
             </div>
 
             <div className="form-control">
@@ -204,21 +205,24 @@ function AcceptInviteForm() {
               </label>
               <input
                 type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="input input-bordered w-full"
+                {...register("confirmPassword")}
+                className={`input input-bordered w-full ${errors.confirmPassword ? "input-error" : ""}`}
                 placeholder="Confirm your password"
-                required
                 autoComplete="new-password"
               />
+              {errors.confirmPassword && (
+                <label className="label">
+                  <span className="label-text-alt text-error">{errors.confirmPassword.message}</span>
+                </label>
+              )}
             </div>
 
             <button
               type="submit"
               className="btn btn-primary w-full"
-              disabled={isLoading}
+              disabled={isSubmitting}
             >
-              {isLoading && (
+              {isSubmitting && (
                 <span className="loading loading-spinner loading-xs"></span>
               )}
               Set Password & Get Started
