@@ -39,6 +39,7 @@ const {
   getReagentStockHistory,
   getLowStockReagents,
   getExpiredLotsCount,
+  getExpiredLots,
   getFilterOptions,
   checkLotExists,
 } = await import('@/actions/inventory');
@@ -258,6 +259,13 @@ describe('getReagents', () => {
     const result = await getReagents({ filters: { lowStock: true } });
     expect(result.success).toBe(true);
     expect(result.data.every(r => r.total_quantity <= r.minimum_stock)).toBe(true);
+  });
+
+  it('search handles PostgREST special characters without error', async () => {
+    // Parentheses, commas, and backslashes are PostgREST syntax characters in .or()
+    const result = await getReagents({ filters: { search: 'Reagent (test)' } });
+    expect(result.success).toBe(true);
+    expect(Array.isArray(result.data)).toBe(true);
   });
 
   it('returns empty for no matches', async () => {
@@ -631,6 +639,98 @@ describe('getExpiredLotsCount', () => {
     const result = await getExpiredLotsCount();
     expect(result.success).toBe(true);
     expect(result.count).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ============ getExpiredLots ============
+
+describe('getExpiredLots', () => {
+  it('returns lots with reagent details for expired lots', async () => {
+    const r = await createReagent({
+      name: 'Expired Detail Reagent',
+      reference: `REF-EXP-DET-${Date.now()}`,
+      supplier: 'Supplier',
+      storage_location: 'Fridge A',
+      storage_temperature: '2-8°C',
+      sector: 'Hematology',
+    });
+
+    await stockIn({
+      reagent_id: r.data.id,
+      lot_number: `EXP-DET-LOT-${Date.now()}`,
+      quantity: 5,
+      expiry_date: '2020-01-01',
+    });
+
+    const result = await getExpiredLots();
+    expect(result.success).toBe(true);
+    expect(result.data.length).toBeGreaterThanOrEqual(1);
+
+    const lot = result.data.find(l => l.reagent_id === r.data.id);
+    expect(lot).toBeDefined();
+    expect(lot.reagents).toBeDefined();
+    expect(lot.reagents.name).toBe('Expired Detail Reagent');
+  });
+
+  it('includes lots expiring within 30 days', async () => {
+    const r = await createReagent({
+      name: 'Soon Expiring Reagent',
+      reference: `REF-SOON-${Date.now()}`,
+      supplier: 'Supplier',
+      storage_location: 'Fridge A',
+      storage_temperature: '2-8°C',
+      sector: 'Hematology',
+    });
+
+    const soonDate = new Date();
+    soonDate.setDate(soonDate.getDate() + 15);
+    const soonDateStr = soonDate.toISOString().split('T')[0];
+
+    await stockIn({
+      reagent_id: r.data.id,
+      lot_number: `SOON-LOT-${Date.now()}`,
+      quantity: 3,
+      expiry_date: soonDateStr,
+    });
+
+    const result = await getExpiredLots();
+    expect(result.success).toBe(true);
+    const lot = result.data.find(l => l.reagent_id === r.data.id);
+    expect(lot).toBeDefined();
+  });
+
+  it('excludes lots expiring beyond 30 days', async () => {
+    const r = await createReagent({
+      name: 'Far Future Reagent',
+      reference: `REF-FAR-${Date.now()}`,
+      supplier: 'Supplier',
+      storage_location: 'Fridge A',
+      storage_temperature: '2-8°C',
+      sector: 'Hematology',
+    });
+
+    await stockIn({
+      reagent_id: r.data.id,
+      lot_number: `FAR-LOT-${Date.now()}`,
+      quantity: 10,
+      expiry_date: '2030-12-31',
+    });
+
+    const result = await getExpiredLots();
+    expect(result.success).toBe(true);
+    const lot = result.data.find(l => l.reagent_id === r.data.id);
+    expect(lot).toBeUndefined();
+  });
+
+  it('returns lots ordered by expiry_date ascending', async () => {
+    const result = await getExpiredLots();
+    expect(result.success).toBe(true);
+    if (result.data.length >= 2) {
+      for (let i = 1; i < result.data.length; i++) {
+        expect(new Date(result.data[i].expiry_date).getTime())
+          .toBeGreaterThanOrEqual(new Date(result.data[i - 1].expiry_date).getTime());
+      }
+    }
   });
 });
 

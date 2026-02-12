@@ -104,7 +104,9 @@ export async function getReagents({
       query = query.ilike("storage_location", `%${filters.storage_location}%`);
     }
     if (filters.search) {
-      query = query.or(`name.ilike.%${filters.search}%,reference.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+      const safe = filters.search.replace(/"/g, '\\"');
+      const pattern = `"%${safe}%"`;
+      query = query.or(`name.ilike.${pattern},reference.ilike.${pattern},description.ilike.${pattern}`);
     }
 
     // Apply sorting
@@ -544,6 +546,43 @@ export async function getExpiredLotsCount() {
 
     return { success: true, count: uniqueReagentIds.length };
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), count: 0 }));
+}
+
+/**
+ * Get expired and expiring-soon lots with reagent details
+ * Returns lots where expiry_date <= today + 30 days (WARNING_DAYS threshold)
+ */
+export async function getExpiredLots() {
+  return withAuth(async (user, supabase) => {
+    const warningDate = new Date();
+    warningDate.setDate(warningDate.getDate() + 30);
+    const warningDateStr = warningDate.toISOString().split('T')[0];
+
+    const { data, error } = await supabase
+      .from("lots")
+      .select(`
+        id,
+        lot_number,
+        expiry_date,
+        quantity,
+        reagent_id,
+        reagents (
+          id,
+          name,
+          reference,
+          unit
+        )
+      `)
+      .eq("is_active", true)
+      .gt("quantity", 0)
+      .not("expiry_date", "is", null)
+      .lte("expiry_date", warningDateStr)
+      .order("expiry_date", { ascending: true });
+
+    if (error) throw error;
+
+    return { success: true, data: data || [] };
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: [] }));
 }
 
 /**

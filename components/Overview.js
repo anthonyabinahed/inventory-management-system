@@ -5,8 +5,11 @@ import { Package, AlertTriangle, Clock } from "lucide-react";
 import {
   getReagents,
   getLowStockReagents,
-  getExpiredLotsCount
+  getExpiredLotsCount,
+  getExpiredLots
 } from "@/actions/inventory";
+import { AlertsPanel } from "@/components/AlertsPanel";
+import { getExpiryStatus, getStockStatus } from "@/libs/constants";
 
 export function Overview({ onNavigateToInventory }) {
   const [stats, setStats] = useState({
@@ -14,6 +17,7 @@ export function Overview({ onNavigateToInventory }) {
     lowStock: 0,
     expired: 0
   });
+  const [alerts, setAlerts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -23,10 +27,11 @@ export function Overview({ onNavigateToInventory }) {
   const loadStats = async () => {
     setIsLoading(true);
     try {
-      const [reagentsResult, lowStockResult, expiredResult] = await Promise.all([
+      const [reagentsResult, lowStockResult, expiredResult, expiredLotsResult] = await Promise.all([
         getReagents({ page: 1, limit: 1 }), // Just to get total count
         getLowStockReagents(),
-        getExpiredLotsCount()
+        getExpiredLotsCount(),
+        getExpiredLots()
       ]);
 
       setStats({
@@ -34,6 +39,54 @@ export function Overview({ onNavigateToInventory }) {
         lowStock: lowStockResult.data?.length || 0,
         expired: expiredResult.count || 0
       });
+
+      // Build unified alerts array
+      const alertItems = [];
+
+      // Expiry alerts from lot-level data
+      if (expiredLotsResult.success && expiredLotsResult.data) {
+        for (const lot of expiredLotsResult.data) {
+          const { status, daysUntil } = getExpiryStatus(lot.expiry_date);
+          if (status === "expired" || status === "critical" || status === "warning") {
+            const detail = status === "expired"
+              ? `Expired ${Math.abs(daysUntil)} days ago`
+              : `Expires in ${daysUntil} day${daysUntil !== 1 ? "s" : ""}`;
+            alertItems.push({
+              id: `expiry-${lot.id}`,
+              type: status,
+              severity: status === "warning" ? "warning" : "error",
+              reagentName: lot.reagents?.name || "Unknown",
+              detail: `${detail} (Lot: ${lot.lot_number})`,
+              filter: { search: lot.reagents?.name || "" },
+            });
+          }
+        }
+      }
+
+      // Stock alerts from low stock reagents data (already fetched for stat card)
+      if (lowStockResult.success && lowStockResult.data) {
+        for (const reagent of lowStockResult.data) {
+          const { status } = getStockStatus(reagent.total_quantity, reagent.minimum_stock);
+          if (status === "out" || status === "low") {
+            alertItems.push({
+              id: `stock-${reagent.id}`,
+              type: status,
+              severity: status === "out" ? "error" : "warning",
+              reagentName: reagent.name,
+              detail: `${reagent.total_quantity} / ${reagent.minimum_stock} ${reagent.unit}`,
+              filter: { search: reagent.name },
+            });
+          }
+        }
+      }
+
+      // Sort: errors first, then warnings
+      alertItems.sort((a, b) => {
+        const order = { error: 0, warning: 1 };
+        return (order[a.severity] ?? 2) - (order[b.severity] ?? 2);
+      });
+
+      setAlerts(alertItems);
     } catch (error) {
       console.error("Failed to load stats:", error);
     } finally {
@@ -112,6 +165,12 @@ export function Overview({ onNavigateToInventory }) {
           </div>
         </div>
       </div>
+
+      {/* Alerts Section */}
+      <AlertsPanel
+        alerts={alerts}
+        onAlertClick={handleCardClick}
+      />
     </div>
   );
 }
