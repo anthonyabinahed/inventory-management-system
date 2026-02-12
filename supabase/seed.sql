@@ -69,6 +69,26 @@ DECLARE
   -- Quality Assessment
   reagent_qa_eqas UUID;
 BEGIN
+  -- Create a seed admin user if none exists yet
+  -- (the handle_new_user trigger will auto-create the matching profile)
+  INSERT INTO auth.users (
+    id, instance_id, aud, role, email,
+    encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data,
+    created_at, updated_at
+  )
+  SELECT
+    '00000000-0000-0000-0000-000000000001'::UUID,
+    '00000000-0000-0000-0000-000000000000'::UUID,
+    'authenticated', 'authenticated',
+    'admin@lab.local',
+    crypt('12345678', gen_salt('bf')),
+    NOW(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{"role":"admin","full_name":"Seed Admin"}'::jsonb,
+    NOW(), NOW()
+  WHERE NOT EXISTS (SELECT 1 FROM auth.users LIMIT 1);
+
   -- Get first user from profiles for created_by/updated_by
   SELECT id INTO seed_user_id FROM public.profiles LIMIT 1;
 

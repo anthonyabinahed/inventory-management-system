@@ -28,7 +28,7 @@ const optionalString = z
 export function validateWithSchema(schema, data) {
   const result = schema.safeParse(data);
   if (!result.success) {
-    const message = result.error.errors[0]?.message || "Validation failed";
+    const message = result.error.issues[0]?.message || "Validation failed";
     return { success: false, errorMessage: message };
   }
   return { success: true, data: result.data };

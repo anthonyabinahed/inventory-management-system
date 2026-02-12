@@ -43,3 +43,5 @@ public/sitemap-0.xml.env
 
 # supabase
 supabase/.temp/
+supabase/.branches/
+supabase/config.toml

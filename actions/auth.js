@@ -110,7 +110,7 @@ export async function verifyInviteToken(tokenHash) {
 export async function updatePassword(password) {
     const parsed = passwordSchema.safeParse(password);
     if (!parsed.success) {
-        return { success: false, errorMessage: parsed.error.errors[0]?.message || "Invalid password" };
+        return { success: false, errorMessage: parsed.error.issues[0]?.message || "Invalid password" };
     }
 
     try {

@@ -7,13 +7,7 @@ import { notFound } from "next/navigation";
 import ButtonPopover from "@/components/ButtonPopover";
 
 // UI Components
-import Modal from "@/components/Modal";
 import Tabs from "@/components/Tabs";
-import FAQ from "@/components/FAQ";
-import BetterIcon from "@/components/BetterIcon";
-
-import FeaturesListicle from "@/components/FeaturesListicle";
-import WithWithout from "@/components/WithWithout";
 
 // Layout
 import Header from "@/components/Header";
@@ -40,8 +34,6 @@ export default function PlaygroundPage() {
   if (process.env.NODE_ENV === "production") {
     notFound();
   }
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const scrollToSection = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -112,13 +104,6 @@ export default function PlaygroundPage() {
 
       {/* UI Components Section */}
       <Section title="UI Components" id="ui-components">
-        <ComponentCard title="Modal">
-          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-            Open Modal
-          </button>
-          <Modal isModalOpen={isModalOpen} setIsModalOpen={setIsModalOpen} />
-        </ComponentCard>
-
         <ComponentCard title="Tabs">
           <div className="w-full">
             <Tabs />
@@ -191,45 +176,6 @@ export default function PlaygroundPage() {
           </div>
         </ComponentCard>
       </Section>
-
-      {/* Icons Section */}
-      <Section title="Icons" id="icons">
-        <ComponentCard title="BetterIcon">
-          <BetterIcon>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
-            </svg>
-          </BetterIcon>
-          <BetterIcon>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
-            </svg>
-          </BetterIcon>
-          <BetterIcon>
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z" />
-            </svg>
-          </BetterIcon>
-        </ComponentCard>
-      </Section>
-
-
-      <Section title="">
-        <h3 className="text-xl font-semibold mb-4">FeaturesListicle:</h3>
-      </Section>
-      <FeaturesListicle />
-
-      {/* FAQ Section */}
-      <Section title="FAQ Section" id="faq">
-        <p className="text-base-content/60 mb-4">Accordion-style FAQ:</p>
-      </Section>
-      <FAQ />
-
-      {/* Comparison Section */}
-      <Section title="Comparison (With/Without)" id="comparison">
-        <p className="text-base-content/60 mb-4">Before/after comparison:</p>
-      </Section>
-      <WithWithout />
 
       {/* Layout Components */}
       <Section title="Layout Components" id="layout">
