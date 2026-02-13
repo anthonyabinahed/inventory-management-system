@@ -1,15 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { Users, BarChart3 } from "lucide-react";
+import { Users, BarChart3, Barcode } from "lucide-react";
 import UsersManagement from "@/components/UsersManagement";
 import { Analytics } from "@/components/Analytics";
+import { BarcodeManager } from "@/components/BarcodeManager";
 
 const tabs = [
   {
     id: "users",
     title: "Users",
     icon: Users,
+  },
+  {
+    id: "barcode_manager",
+    title: "Barcode Manager",
+    icon: Barcode,
   },
   {
     id: "analytics",
@@ -53,6 +59,9 @@ export default function AdminDashboard() {
         <div>
           <div className={activeTab === "users" ? "animate-opacity" : "hidden"}>
             <UsersManagement />
+          </div>
+          <div className={activeTab === "barcode_manager" ? "animate-opacity" : "hidden"}>
+            <BarcodeManager />
           </div>
           <div className={activeTab === "analytics" ? "animate-opacity" : "hidden"}>
             <Analytics />

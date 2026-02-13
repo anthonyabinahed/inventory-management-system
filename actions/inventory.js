@@ -612,6 +612,78 @@ export async function getFilterOptions() {
 }
 
 /**
+ * Get a lot with its parent reagent data by reagent_id + lot_number.
+ * Used by the Scanner after decoding a QR code.
+ * Returns { reagent, lot } where lot may be null if it doesn't exist yet.
+ */
+export async function getLotWithReagent(reagentId, lotNumber) {
+  return withAuth(async (user, supabase) => {
+    // Get the reagent (always needed)
+    const { data: reagent, error: reagentError } = await supabase
+      .from("reagents")
+      .select("*")
+      .eq("id", reagentId)
+      .eq("is_active", true)
+      .single();
+
+    if (reagentError) throw reagentError;
+
+    // Check for existing lot
+    const { data: lot, error: lotError } = await supabase
+      .from("lots")
+      .select("*")
+      .eq("reagent_id", reagentId)
+      .eq("lot_number", lotNumber)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (lotError) throw lotError;
+
+    return { success: true, data: { reagent, lot } };
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
+}
+
+/**
+ * Search reagents by name/reference and/or category for the BarcodeManager.
+ * Returns a lightweight list of matching reagents.
+ * - query alone: text search (min 1 char)
+ * - category alone: browse by category
+ * - both: text search scoped to category
+ */
+export async function searchReagents(query, category) {
+  return withAuth(async (user, supabase) => {
+    const hasQuery = query && query.length >= 1;
+    const hasCategory = !!category;
+
+    if (!hasQuery && !hasCategory) {
+      return { success: true, data: [] };
+    }
+
+    let dbQuery = supabase
+      .from("reagents")
+      .select("id, name, reference, category, unit, supplier")
+      .eq("is_active", true);
+
+    if (hasCategory) {
+      dbQuery = dbQuery.eq("category", category);
+    }
+
+    if (hasQuery) {
+      const safe = query.replace(/"/g, '\\"');
+      const pattern = `"%${safe}%"`;
+      dbQuery = dbQuery.or(`name.ilike.${pattern},reference.ilike.${pattern}`);
+    }
+
+    const { data, error } = await dbQuery
+      .order("name", { ascending: true });
+
+    if (error) throw error;
+
+    return { success: true, data: data || [] };
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: [] }));
+}
+
+/**
  * Check if a lot number exists for a reagent
  */
 export async function checkLotExists(reagentId, lotNumber) {

@@ -91,6 +91,22 @@ export const forgotPasswordSchema = z.object({
   email: z.email("Invalid email address"),
 });
 
+// ============ BARCODE SCHEMAS ============
+
+// Validates decoded QR payload (client-side, used in Scanner)
+export const qrPayloadSchema = z.object({
+  reagent_id: z.uuid("Invalid reagent ID in QR code"),
+  lot_number: z.string().min(1, "Lot number is required"),
+  expiry_date: z.string().nullable().optional(),
+});
+
+// Validates add-label form in BarcodeManager (client-side only)
+export const addLabelSchema = z.object({
+  lot_number: z.string().min(1, "Lot number is required"),
+  expiry_date: z.string().optional(),
+  quantity: z.coerce.number().int().min(1, "At least 1 label required").max(384, "Maximum 384 labels per entry").default(1),
+});
+
 // ============ ADMIN SCHEMAS ============
 
 export const inviteUserSchema = z.object({
