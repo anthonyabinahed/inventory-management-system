@@ -1,13 +1,45 @@
-import { Wrench } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { TrendingDown, PieChart, Activity } from "lucide-react";
+import ConsumptionDashboard from "./analytics/ConsumptionDashboard";
+import InventoryCompositionDashboard from "./analytics/InventoryCompositionDashboard";
+import ActivityAuditDashboard from "./analytics/ActivityAuditDashboard";
+
+const DASHBOARDS = [
+  { id: "consumption", title: "Consumption", icon: TrendingDown },
+  { id: "inventory", title: "Inventory", icon: PieChart },
+  { id: "activity", title: "Activity", icon: Activity },
+];
 
 export function Analytics() {
+  const [active, setActive] = useState(DASHBOARDS[0].id);
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-[250px] sm:min-h-[400px] p-4 sm:p-6">
-      <Wrench className="size-12 sm:size-16 text-warning mb-3 sm:mb-4" />
-      <h2 className="text-xl sm:text-2xl font-bold mb-2 text-center">Under Construction</h2>
-      <p className="text-sm sm:text-base text-base-content/60 text-center max-w-md px-4">
-        The Analytics dashboard is currently being developed. Check back soon for insights and statistics about your inventory system.
-      </p>
+    <div className="space-y-4 sm:space-y-6">
+      {/* Dashboard selector */}
+      <div className="flex flex-wrap gap-1.5 sm:gap-2">
+        {DASHBOARDS.map((d) => {
+          const Icon = d.icon;
+          return (
+            <button
+              key={d.id}
+              className={`btn btn-sm ${active === d.id ? "btn-primary" : "btn-ghost"}`}
+              onClick={() => setActive(d.id)}
+            >
+              <Icon className="size-4" />
+              <span className="hidden sm:inline">{d.title}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Dashboard content */}
+      <div className="animate-opacity" key={active}>
+        {active === "consumption" && <ConsumptionDashboard />}
+        {active === "inventory" && <InventoryCompositionDashboard />}
+        {active === "activity" && <ActivityAuditDashboard />}
+      </div>
     </div>
   );
 }

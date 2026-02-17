@@ -30,6 +30,27 @@ export const MOVEMENT_TYPES = [
 
 export const PAGE_SIZES = [25, 50, 100];
 
+// Audit log action → DaisyUI badge class
+const AUDIT_BADGE_MAP = {
+  create_reagent: 'badge-success',
+  stock_in: 'badge-success',
+  invite_user: 'badge-success',
+  update_reagent: 'badge-warning',
+  update_user_role: 'badge-warning',
+  stock_out: 'badge-info',
+  delete_reagent: 'badge-error',
+  delete_lot: 'badge-error',
+  revoke_user: 'badge-error',
+};
+
+export function getAuditActionBadgeClass(action) {
+  if (AUDIT_BADGE_MAP[action]) return AUDIT_BADGE_MAP[action];
+  if (action.startsWith('create_')) return 'badge-success';
+  if (action.startsWith('update_')) return 'badge-warning';
+  if (action.startsWith('delete_')) return 'badge-error';
+  return 'badge-ghost';
+}
+
 export const EXPIRY_THRESHOLDS = {
   CRITICAL_DAYS: 7,
   WARNING_DAYS: 30,

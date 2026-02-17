@@ -8,6 +8,7 @@ import { getErrorMessage } from "@/libs/utils";
 import { inviteUserSchema, updateUserRoleSchema, validateWithSchema } from "@/libs/schemas";
 import config from "@/config";
 import { getCurrentUser } from "@/actions/auth";
+import { logAuditEvent } from "@/libs/audit";
 
 // ============ HELPER FUNCTIONS ============
 
@@ -67,7 +68,7 @@ export async function updateUserRole(userId, newRole) {
     if (!validated.success) return validated;
 
     try {
-        const { isAdmin, error: authError } = await verifyAdmin();
+        const { isAdmin, user, error: authError } = await verifyAdmin();
 
         if (!isAdmin) {
             return { success: false, errorMessage: authError };
@@ -80,6 +81,14 @@ export async function updateUserRole(userId, newRole) {
             .eq("id", userId);
 
         if (error) throw error;
+
+        await logAuditEvent(supabase, user.id, {
+            action: 'update_user_role',
+            resourceType: 'user',
+            resourceId: userId,
+            description: `Changed user role to "${newRole}"`,
+        });
+
         return { success: true };
     } catch (error) {
         return { success: false, errorMessage: getErrorMessage(error) };
@@ -96,7 +105,7 @@ export async function inviteUser(email, fullName = "", role = "user") {
 
     try {
         // Verify requester is admin
-        const { isAdmin, error: authError } = await verifyAdmin();
+        const { isAdmin, user, error: authError } = await verifyAdmin();
 
         if (!isAdmin) {
             return { success: false, errorMessage: authError };
@@ -178,7 +187,15 @@ export async function inviteUser(email, fullName = "", role = "user") {
             text: `You've been invited to ${config.appName}!\n\nHello${fullName ? ` ${fullName}` : ""},\n\nClick this link to set your password and get started:\n${inviteUrl}\n\nThis invitation link will expire in 24 hours.`,
         });
 
-                return { success: true, userId: data.user?.id, errorMessage: null };
+        const supabase = await createSupabaseClient();
+        await logAuditEvent(supabase, user.id, {
+            action: 'invite_user',
+            resourceType: 'user',
+            resourceId: data.user?.id,
+            description: `Invited user "${email}"`,
+        });
+
+        return { success: true, userId: data.user?.id, errorMessage: null };
     } catch (error) {
         console.error("Invite user error:", error);
         return { success: false, errorMessage: getErrorMessage(error) };
@@ -190,7 +207,7 @@ export async function inviteUser(email, fullName = "", role = "user") {
  */
 export async function revokeUser(userId) {
     try {
-        const { isAdmin, error: authError } = await verifyAdmin();
+        const { isAdmin, user, error: authError } = await verifyAdmin();
 
         if (!isAdmin) {
             return { success: false, errorMessage: authError };
@@ -200,6 +217,14 @@ export async function revokeUser(userId) {
         const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
         if (error) throw error;
+
+        const supabase = await createSupabaseClient();
+        await logAuditEvent(supabase, user.id, {
+            action: 'revoke_user',
+            resourceType: 'user',
+            resourceId: userId,
+            description: `Revoked user "${userId}"`,
+        });
 
         return { success: true, errorMessage: null };
     } catch (error) {

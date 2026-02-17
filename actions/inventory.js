@@ -3,6 +3,7 @@
 import { withAuth } from "@/libs/auth";
 import { getErrorMessage } from "@/libs/utils";
 import { reagentSchema, reagentUpdateSchema, stockInSchema, stockOutSchema, validateWithSchema } from "@/libs/schemas";
+import { logAuditEvent } from "@/libs/audit";
 
 // ============ HELPER FUNCTIONS ============
 
@@ -187,6 +188,13 @@ export async function createReagent(reagentData) {
 
     if (error) throw error;
 
+    await logAuditEvent(supabase, user.id, {
+      action: 'create_reagent',
+      resourceType: 'reagent',
+      resourceId: data.id,
+      description: `Created reagent "${data.name}"`,
+    });
+
     return { success: true, data };
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
@@ -211,6 +219,13 @@ export async function updateReagent(id, updates) {
 
     if (error) throw error;
 
+    await logAuditEvent(supabase, user.id, {
+      action: 'update_reagent',
+      resourceType: 'reagent',
+      resourceId: id,
+      description: `Updated reagent "${data.name}"`,
+    });
+
     return { success: true, data };
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
@@ -220,6 +235,13 @@ export async function updateReagent(id, updates) {
  */
 export async function deleteReagent(id) {
   return withAuth(async (user, supabase) => {
+    // Fetch reagent name before soft-deleting (for audit log)
+    const { data: reagent } = await supabase
+      .from("reagents")
+      .select("name")
+      .eq("id", id)
+      .single();
+
     // Soft delete reagent
     const { error } = await supabase
       .from("reagents")
@@ -233,6 +255,13 @@ export async function deleteReagent(id) {
       .from("lots")
       .update({ is_active: false, updated_by: user.id })
       .eq("reagent_id", id);
+
+    await logAuditEvent(supabase, user.id, {
+      action: 'delete_reagent',
+      resourceType: 'reagent',
+      resourceId: id,
+      description: `Deleted reagent "${reagent?.name || id}"`,
+    });
 
     return { success: true };
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
@@ -354,6 +383,13 @@ export async function stockIn(params) {
     // Recalculate reagent total_quantity after lot change
     await recalculateReagentTotalQuantity(supabase, reagent_id, user.id);
 
+    await logAuditEvent(supabase, user.id, {
+      action: 'stock_in',
+      resourceType: 'lot',
+      resourceId: lot.id,
+      description: `Stocked in ${quantity} to lot ${lot_number} / reagent ${reagent_id} ${action === 'created' ? ' (new lot)' : ''}`,
+    });
+
     return { success: true, data: lot, action };
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
@@ -369,7 +405,7 @@ export async function stockOut(lotId, quantity, opts = {}) {
   const notes = validated.data.notes;
 
   return withAuth(async (user, supabase) => {
-    // Get current lot
+    // Get current lot (including lot_number for audit)
     const { data: lot, error: fetchError } = await supabase
       .from("lots")
       .select("*")
@@ -405,6 +441,13 @@ export async function stockOut(lotId, quantity, opts = {}) {
     // Recalculate reagent total_quantity after lot change
     await recalculateReagentTotalQuantity(supabase, lot.reagent_id, user.id);
 
+    await logAuditEvent(supabase, user.id, {
+      action: 'stock_out',
+      resourceType: 'lot',
+      resourceId: lotId,
+      description: `Stocked out ${quantity} from lot ${lot.lot_number || lotId}`,
+    });
+
     return { success: true, newQuantity };
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
@@ -418,7 +461,7 @@ export async function deleteLot(lotId) {
     // First get the lot to know which reagent to update
     const { data: lot, error: fetchError } = await supabase
       .from("lots")
-      .select("reagent_id")
+      .select("reagent_id, lot_number")
       .eq("id", lotId)
       .single();
 
@@ -434,6 +477,13 @@ export async function deleteLot(lotId) {
 
     // Recalculate reagent total_quantity after lot deletion
     await recalculateReagentTotalQuantity(supabase, lot.reagent_id, user.id);
+
+    await logAuditEvent(supabase, user.id, {
+      action: 'delete_lot',
+      resourceType: 'lot',
+      resourceId: lotId,
+      description: `Deleted lot "${lot.lot_number} / reagent ${lot.reagent_id}"`,
+    });
 
     return { success: true };
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));

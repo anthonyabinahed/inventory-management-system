@@ -107,6 +107,15 @@ export const addLabelSchema = z.object({
   quantity: z.coerce.number().int().min(1, "At least 1 label required").max(384, "Maximum 384 labels per entry").default(1),
 });
 
+// ============ AUDIT LOG SCHEMAS ============
+
+export const auditLogQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().optional(),
+  resourceType: z.string().optional(),
+});
+
 // ============ ADMIN SCHEMAS ============
 
 export const inviteUserSchema = z.object({

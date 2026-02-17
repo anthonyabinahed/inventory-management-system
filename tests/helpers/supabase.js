@@ -38,6 +38,7 @@ export async function deleteUserByEmail(email) {
 
   if (profile) {
     // Clean up any data referencing this user's profile before deletion
+    await admin.from('audit_logs').delete().eq('user_id', profile.id);
     await admin.from('stock_movements').delete().eq('performed_by', profile.id);
     await admin.from('lots').delete().eq('created_by', profile.id);
     await admin.from('reagents').delete().eq('created_by', profile.id);
@@ -161,26 +162,48 @@ export async function createTestLot(reagentId, overrides = {}, client) {
 }
 
 /**
- * Deletes all test data. Call in afterAll/afterEach for clean slate.
+ * Deletes only test-created data. Preserves seed data and real user data.
+ * Test data is identified by:
+ * - created_by belonging to a @test.com / @example.com user, or
+ * - created_by being NULL (test helpers using admin client without overrides)
  */
 export async function cleanupAll() {
   const admin = getAdminClient();
 
-  // Delete all stock movements first (FK to lots and profiles)
-  await admin.from('stock_movements').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  // Collect test user IDs (profiles with test email domains)
+  const { data: testProfiles } = await admin
+    .from('profiles')
+    .select('id, email');
+  const testUserIds = (testProfiles || [])
+    .filter(p => p.email?.endsWith('@test.com') || p.email?.endsWith('@example.com'))
+    .map(p => p.id);
 
-  // Delete all lots (FK to reagents)
-  await admin.from('lots').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
-  // Delete all reagents
-  await admin.from('reagents').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
-  // Delete all auth users via profiles table
-  // (listUsers has a GoTrue bug on this local Supabase version)
-  const { data: profiles } = await admin.from('profiles').select('id');
-  for (const profile of (profiles || [])) {
-    await admin.auth.admin.deleteUser(profile.id);
+  // Delete test audit logs (FK to profiles)
+  if (testUserIds.length > 0) {
+    await admin.from('audit_logs').delete().in('user_id', testUserIds);
   }
-  // Note: orphaned auth users (no profile) can't be cleaned up without listUsers.
-  // createTestUser handles this with sign-in + delete retry.
+
+  // Delete test stock movements (FK to lots and profiles)
+  if (testUserIds.length > 0) {
+    await admin.from('stock_movements').delete().in('performed_by', testUserIds);
+  }
+
+  // Delete test lots (created by test users or with NULL created_by)
+  if (testUserIds.length > 0) {
+    await admin.from('lots').delete().in('created_by', testUserIds);
+  }
+  await admin.from('lots').delete().is('created_by', null);
+
+  // Delete test reagents (created by test users or with NULL created_by)
+  if (testUserIds.length > 0) {
+    await admin.from('reagents').delete().in('created_by', testUserIds);
+  }
+  await admin.from('reagents').delete().is('created_by', null);
+
+  // Delete test auth users
+  for (const profile of (testProfiles || [])) {
+    if (profile.email?.endsWith('@test.com') || profile.email?.endsWith('@example.com')) {
+      await admin.auth.admin.deleteUser(profile.id);
+    }
+  }
 }

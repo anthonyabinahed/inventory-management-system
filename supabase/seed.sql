@@ -674,4 +674,23 @@ BEGIN
   INSERT INTO public.stock_movements (lot_id, movement_type, quantity, quantity_before, quantity_after, notes, performed_by)
   VALUES (temp_lot_id, 'in', 1, 0, 1, 'Initial stock from inventory setup', seed_user_id);
 
+  -- ============================================
+  -- AUDIT LOGS (representative sample entries)
+  -- ============================================
+
+  INSERT INTO public.audit_logs (action, resource_type, resource_id, description, user_id, performed_at)
+  VALUES
+    ('create_reagent', 'reagent', reagent_ps_bhcg::TEXT, 'Created reagent "Free βhCG Kryptor"', seed_user_id, NOW() - INTERVAL '30 days'),
+    ('create_reagent', 'reagent', reagent_ih_abod::TEXT, 'Created reagent "Diaclon ABO/D"', seed_user_id, NOW() - INTERVAL '28 days'),
+    ('stock_in', 'lot', temp_lot_id::TEXT, 'Stocked in 75 to lot 809A24-01', seed_user_id, NOW() - INTERVAL '25 days'),
+    ('stock_in', 'lot', temp_lot_id::TEXT, 'Stocked in 3 to lot 01324-2501', seed_user_id, NOW() - INTERVAL '24 days'),
+    ('update_reagent', 'reagent', reagent_ps_afp::TEXT, 'Updated reagent "AFP Kryptor"', seed_user_id, NOW() - INTERVAL '20 days'),
+    ('stock_out', 'lot', temp_lot_id::TEXT, 'Stocked out 5 from lot 809A24-01', seed_user_id, NOW() - INTERVAL '15 days'),
+    ('invite_user', 'user', NULL, 'Invited user "tech@lab.local"', seed_user_id, NOW() - INTERVAL '12 days'),
+    ('update_user_role', 'user', NULL, 'Changed user role to "admin"', seed_user_id, NOW() - INTERVAL '10 days'),
+    ('stock_in', 'lot', temp_lot_id::TEXT, 'Stocked in 2 to lot E2650-2501 (new lot)', seed_user_id, NOW() - INTERVAL '7 days'),
+    ('delete_lot', 'lot', temp_lot_id::TEXT, 'Deleted lot "E2580M-2401"', seed_user_id, NOW() - INTERVAL '3 days'),
+    ('stock_out', 'lot', temp_lot_id::TEXT, 'Stocked out 1 from lot QC1-24-088', seed_user_id, NOW() - INTERVAL '1 day'),
+    ('create_reagent', 'reagent', reagent_se_vzv_igg::TEXT, 'Created reagent "Anti-VZV ELISA (IgG)"', seed_user_id, NOW() - INTERVAL '6 hours');
+
 END $$;
