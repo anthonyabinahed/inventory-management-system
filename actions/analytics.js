@@ -6,6 +6,12 @@ import { auditLogQuerySchema, validateWithSchema } from "@/libs/schemas";
 
 // ============ HELPERS ============
 
+/**
+ * Converts a date range shorthand into an ISO timestamp for query filtering.
+ *
+ * @param {'7d'|'30d'|'90d'|'6m'} dateRange - Shorthand for how far back to look
+ * @returns {string} ISO 8601 timestamp (e.g. "2026-01-21T08:30:00.000Z")
+ */
 function getStartDate(dateRange) {
   const now = new Date();
   switch (dateRange) {
@@ -18,44 +24,78 @@ function getStartDate(dateRange) {
   return now.toISOString();
 }
 
+/**
+ * Groups stock movements into time buckets and sums in/out quantities per bucket.
+ *
+ * @param {Array} movements - Rows with { performed_at, movement_type, quantity }
+ * @param {'day'|'week'|'month'} periodType - Bucket granularity
+ * @returns {Array<{ key: string, label: string, in: number, out: number }>}
+ *   Sorted chronologically. `key` is a sortable date string (YYYY-MM-DD or YYYY-MM),
+ *   `label` is the human-readable display text for chart axes.
+ *
+ *   day   → key: "2026-01-15",  label: "Jan 15"
+ *   week  → key: "2026-01-12",  label: "Jan 12–Jan 18"
+ *   month → key: "2026-01",     label: "Jan 2026"
+ */
 function groupByPeriod(movements, periodType = 'month') {
   const byPeriod = {};
+
   for (const m of movements) {
     const date = new Date(m.performed_at);
     let key, label;
+
     if (periodType === 'day') {
       key = m.performed_at.split('T')[0];
       label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
     } else if (periodType === 'week') {
+      // Snap to Sunday–Saturday week boundaries
       const startOfWeek = new Date(date);
       startOfWeek.setDate(date.getDate() - date.getDay());
       const endOfWeek = new Date(startOfWeek);
       endOfWeek.setDate(startOfWeek.getDate() + 6);
+
       key = startOfWeek.toISOString().split('T')[0];
       const startLabel = startOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       const endLabel = endOfWeek.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
       label = `${startLabel}–${endLabel}`;
+
     } else {
       key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
       label = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
     }
+
     if (!byPeriod[key]) byPeriod[key] = { key, label, in: 0, out: 0 };
+
     const qty = Math.abs(m.quantity);
     if (m.movement_type === 'in') byPeriod[key].in += qty;
     if (m.movement_type === 'out') byPeriod[key].out += qty;
   }
+
   return Object.values(byPeriod).sort((a, b) => a.key.localeCompare(b.key));
 }
 
-// ============ DASHBOARD 1: CONSUMPTION & BURN RATE ============
+// ============ DASHBOARD 1: CONSUMPTION ============
 
-export async function getMovementTrends(dateRange = '30d', sector = null) {
+/**
+ * Returns stock in/out movement data grouped by time period, with optional
+ * sector and machine filters. Used by the ConsumptionDashboard trend chart.
+ *
+ * Period granularity is chosen automatically based on dateRange:
+ *   7d/30d → daily, 90d → weekly, 6m → monthly
+ *
+ * @param {'7d'|'30d'|'90d'|'6m'} dateRange
+ * @param {string|null} sector - Filter to a specific reagent sector
+ * @param {string|null} machine - Filter to a specific machine
+ * @returns {{ success, data: { trends: Array, totalIn: number, totalOut: number } }}
+ */
+export async function getMovementTrends(dateRange = '30d', sector = null, machine = null) {
   return withAuth(async (user, supabase) => {
     const startDate = getStartDate(dateRange);
 
     const { data: movements, error } = await supabase
       .from("stock_movements")
-      .select("movement_type, quantity, performed_at, lots(reagent_id, reagents(sector))")
+      .select("movement_type, quantity, performed_at, lots(reagent_id, reagents(sector, machine))")
       .in("movement_type", ["in", "out"])
       .gte("performed_at", startDate);
 
@@ -64,6 +104,9 @@ export async function getMovementTrends(dateRange = '30d', sector = null) {
     let filtered = movements || [];
     if (sector) {
       filtered = filtered.filter(m => m.lots?.reagents?.sector === sector);
+    }
+    if (machine) {
+      filtered = filtered.filter(m => m.lots?.reagents?.machine === machine);
     }
 
     const periodType = ['7d', '30d'].includes(dateRange) ? 'day' : dateRange === '90d' ? 'week' : 'month';
@@ -81,6 +124,15 @@ export async function getMovementTrends(dateRange = '30d', sector = null) {
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
 
+/**
+ * Returns the most-consumed reagents ranked by total stock-out quantity.
+ * Aggregates all "out" movements per reagent, then returns the top N.
+ * Movements with deleted lots (lot_id = null) are silently skipped.
+ *
+ * @param {'7d'|'30d'|'90d'|'6m'} dateRange
+ * @param {number} limit - Max items to return (default 10)
+ * @returns {{ success, data: Array<{ id, name, category, unit, totalOut }> }}
+ */
 export async function getTopConsumedItems(dateRange = '30d', limit = 10) {
   return withAuth(async (user, supabase) => {
     const startDate = getStartDate(dateRange);
@@ -111,117 +163,127 @@ export async function getTopConsumedItems(dateRange = '30d', limit = 10) {
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
 
-export async function getBurnRateData() {
+/**
+ * Generic helper: aggregates stock-out quantities by a reagent field (e.g. "sector" or "machine").
+ * Fetches all "out" movements in the date range, groups by the given field, and returns
+ * totals sorted descending. Entries with null/undefined field values are excluded.
+ *
+ * @param {'7d'|'30d'|'90d'|'6m'} dateRange
+ * @param {string} field - Reagent column to group by ("sector" or "machine")
+ * @returns {{ success, data: Array<{ [field]: string, totalOut: number }> }}
+ */
+async function getConsumptionByField(dateRange, field) {
   return withAuth(async (user, supabase) => {
-    const { data: reagents, error: rErr } = await supabase
-      .from("reagents")
-      .select("id, name, total_quantity, minimum_stock, unit, sector, category")
-      .eq("is_active", true);
+    const startDate = getStartDate(dateRange);
 
-    if (rErr) throw rErr;
-
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-
-    const { data: movements, error: mErr } = await supabase
+    const { data: movements, error } = await supabase
       .from("stock_movements")
-      .select("quantity, performed_at, lots(reagent_id)")
+      .select(`quantity, lots(reagents(${field}))`)
       .eq("movement_type", "out")
-      .gte("performed_at", ninetyDaysAgo.toISOString());
+      .gte("performed_at", startDate);
 
-    if (mErr) throw mErr;
+    if (error) throw error;
 
-    const consumptionByReagent = {};
+    const grouped = {};
     for (const m of (movements || [])) {
-      const reagentId = m.lots?.reagent_id;
-      if (!reagentId) continue;
-      if (!consumptionByReagent[reagentId]) consumptionByReagent[reagentId] = 0;
-      consumptionByReagent[reagentId] += Math.abs(m.quantity);
+      const value = m.lots?.reagents?.[field];
+      if (!value) continue;
+      if (!grouped[value]) grouped[value] = 0;
+      grouped[value] += Math.abs(m.quantity);
     }
 
-    const daySpan = 90;
-    const results = (reagents || [])
-      .filter(r => consumptionByReagent[r.id])
-      .map(r => {
-        const totalConsumed = consumptionByReagent[r.id];
-        const avgDailyUse = totalConsumed / daySpan;
-        const daysOfSupply = avgDailyUse > 0
-          ? Math.round(r.total_quantity / avgDailyUse)
-          : null;
-        return {
-          ...r,
-          totalConsumed,
-          avgDailyUse: Math.round(avgDailyUse * 10) / 10,
-          daysOfSupply
-        };
-      })
-      .sort((a, b) => (a.daysOfSupply ?? 9999) - (b.daysOfSupply ?? 9999));
+    const data = Object.entries(grouped)
+      .map(([key, totalOut]) => ({ [field]: key, totalOut }))
+      .sort((a, b) => b.totalOut - a.totalOut);
 
-    const criticalCount = results.filter(r => r.daysOfSupply !== null && r.daysOfSupply < 14).length;
-
-    return { success: true, data: { items: results, criticalCount } };
+    return { success: true, data };
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
 
+/** Total stock-out per sector, sorted descending. */
 export async function getSectorConsumption(dateRange = '30d') {
-  return withAuth(async (user, supabase) => {
-    const startDate = getStartDate(dateRange);
-
-    const { data: movements, error } = await supabase
-      .from("stock_movements")
-      .select("quantity, lots(reagents(sector))")
-      .eq("movement_type", "out")
-      .gte("performed_at", startDate);
-
-    if (error) throw error;
-
-    const bySector = {};
-    for (const m of (movements || [])) {
-      const sector = m.lots?.reagents?.sector;
-      if (!sector) continue;
-      if (!bySector[sector]) bySector[sector] = 0;
-      bySector[sector] += Math.abs(m.quantity);
-    }
-
-    const data = Object.entries(bySector)
-      .map(([sector, totalOut]) => ({ sector, totalOut }))
-      .sort((a, b) => b.totalOut - a.totalOut);
-
-    return { success: true, data };
-  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
+  return getConsumptionByField(dateRange, 'sector');
 }
 
-
+/** Total stock-out per machine, sorted descending. Reagents with no machine are excluded. */
 export async function getMachineConsumption(dateRange = '30d') {
-  return withAuth(async (user, supabase) => {
-    const startDate = getStartDate(dateRange);
-
-    const { data: movements, error } = await supabase
-      .from("stock_movements")
-      .select("quantity, lots(reagents(machine))")
-      .eq("movement_type", "out")
-      .gte("performed_at", startDate);
-
-    if (error) throw error;
-
-    const byMachine = {};
-    for (const m of (movements || [])) {
-      const machine = m.lots?.reagents?.machine;
-      if (!machine) continue;
-      if (!byMachine[machine]) byMachine[machine] = 0;
-      byMachine[machine] += Math.abs(m.quantity);
-    }
-
-    const data = Object.entries(byMachine)
-      .map(([machine, totalOut]) => ({ machine, totalOut }))
-      .sort((a, b) => b.totalOut - a.totalOut);
-
-    return { success: true, data };
-  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
+  return getConsumptionByField(dateRange, 'machine');
 }
 
 // ============ DASHBOARD 2: INVENTORY COMPOSITION ============
 
+/** Returns true if a reagent is below minimum stock or has expired lots. */
+function isAlertItem(reagent, expiredReagentIds) {
+  return reagent.total_quantity <= reagent.minimum_stock || expiredReagentIds.has(reagent.id);
+}
+
+/** Items and total stock per category (reagent, control, calibrator, etc.) */
+function buildCategoryDistribution(items) {
+  const map = {};
+  for (const r of items) {
+    if (!map[r.category]) map[r.category] = { count: 0, totalQty: 0 };
+    map[r.category].count++;
+    map[r.category].totalQty += r.total_quantity;
+  }
+  return Object.entries(map).map(([category, stats]) => ({ category, ...stats }));
+}
+
+/** How many items are above minimum, below minimum, or out of stock. */
+function buildStockCoverage(items) {
+  return {
+    aboveMinimum: items.filter(r => r.total_quantity > r.minimum_stock).length,
+    belowMinimum: items.filter(r => r.total_quantity > 0 && r.total_quantity <= r.minimum_stock).length,
+    outOfStock: items.filter(r => r.total_quantity === 0).length,
+  };
+}
+
+/** Items, stock, and alert count per sector. Sorted by totalItems descending. */
+function buildSectorBreakdown(items, expiredReagentIds) {
+  const map = {};
+  for (const r of items) {
+    if (!map[r.sector]) map[r.sector] = { sector: r.sector, totalItems: 0, alertItems: 0, totalQty: 0 };
+    map[r.sector].totalItems++;
+    map[r.sector].totalQty += r.total_quantity;
+    if (isAlertItem(r, expiredReagentIds)) map[r.sector].alertItems++;
+  }
+  return Object.values(map).sort((a, b) => b.totalItems - a.totalItems);
+}
+
+/** Item count per storage location. Null locations become "Unspecified". Sorted by count descending. */
+function buildStorageUtilization(items) {
+  const map = {};
+  for (const r of items) {
+    const loc = r.storage_location || 'Unspecified';
+    if (!map[loc]) map[loc] = 0;
+    map[loc]++;
+  }
+  return Object.entries(map)
+    .map(([location, count]) => ({ location, count }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/** Items and alert count per machine. Reagents with no machine are excluded. Sorted by totalItems descending. */
+function buildMachineDependency(items, expiredReagentIds) {
+  const map = {};
+  for (const r of items) {
+    if (!r.machine) continue;
+    if (!map[r.machine]) map[r.machine] = { machine: r.machine, totalItems: 0, alertItems: 0 };
+    map[r.machine].totalItems++;
+    if (isAlertItem(r, expiredReagentIds)) map[r.machine].alertItems++;
+  }
+  return Object.values(map).sort((a, b) => b.totalItems - a.totalItems);
+}
+
+/**
+ * Returns a full snapshot of the current inventory state. No date range — this is
+ * a point-in-time view. Used by the InventoryCompositionDashboard.
+ *
+ * Runs two queries:
+ *   1. All active reagents (for counts, categories, stock levels)
+ *   2. Active lots with stock that are past expiry (to flag alert items)
+ *
+ * An "alert item" is a reagent that is either below minimum stock or has expired lots.
+ */
 export async function getInventoryComposition() {
   return withAuth(async (user, supabase) => {
     const { data: reagents, error: rErr } = await supabase
@@ -244,57 +306,7 @@ export async function getInventoryComposition() {
 
     const expiredReagentIds = new Set((expiredLots || []).map(l => l.reagent_id));
     const items = reagents || [];
-
-    // Category distribution
-    const categoryDistribution = {};
-    for (const r of items) {
-      if (!categoryDistribution[r.category]) {
-        categoryDistribution[r.category] = { count: 0, totalQty: 0 };
-      }
-      categoryDistribution[r.category].count++;
-      categoryDistribution[r.category].totalQty += r.total_quantity;
-    }
-
-    // Stock coverage
-    const stockCoverage = {
-      aboveMinimum: items.filter(r => r.total_quantity > r.minimum_stock).length,
-      belowMinimum: items.filter(r => r.total_quantity > 0 && r.total_quantity <= r.minimum_stock).length,
-      outOfStock: items.filter(r => r.total_quantity === 0).length,
-    };
-
-    // Sector breakdown
-    const sectorBreakdown = {};
-    for (const r of items) {
-      if (!sectorBreakdown[r.sector]) {
-        sectorBreakdown[r.sector] = { sector: r.sector, totalItems: 0, alertItems: 0, totalQty: 0 };
-      }
-      sectorBreakdown[r.sector].totalItems++;
-      sectorBreakdown[r.sector].totalQty += r.total_quantity;
-      if (r.total_quantity <= r.minimum_stock || expiredReagentIds.has(r.id)) {
-        sectorBreakdown[r.sector].alertItems++;
-      }
-    }
-
-    // Storage utilization
-    const storageUtilization = {};
-    for (const r of items) {
-      const loc = r.storage_location || 'Unspecified';
-      if (!storageUtilization[loc]) storageUtilization[loc] = 0;
-      storageUtilization[loc]++;
-    }
-
-    // Machine dependency
-    const machineDependency = {};
-    for (const r of items) {
-      if (!r.machine) continue;
-      if (!machineDependency[r.machine]) {
-        machineDependency[r.machine] = { machine: r.machine, totalItems: 0, alertItems: 0 };
-      }
-      machineDependency[r.machine].totalItems++;
-      if (r.total_quantity <= r.minimum_stock || expiredReagentIds.has(r.id)) {
-        machineDependency[r.machine].alertItems++;
-      }
-    }
+    const stockCoverage = buildStockCoverage(items);
 
     return {
       success: true,
@@ -303,149 +315,40 @@ export async function getInventoryComposition() {
         totalQuantity: items.reduce((sum, r) => sum + r.total_quantity, 0),
         belowMinimum: stockCoverage.belowMinimum,
         outOfStock: stockCoverage.outOfStock,
-        categoryDistribution: Object.entries(categoryDistribution)
-          .map(([category, stats]) => ({ category, ...stats })),
+        categoryDistribution: buildCategoryDistribution(items),
         stockCoverage,
-        sectorBreakdown: Object.values(sectorBreakdown).sort((a, b) => b.totalItems - a.totalItems),
-        storageUtilization: Object.entries(storageUtilization)
-          .map(([location, count]) => ({ location, count }))
-          .sort((a, b) => b.count - a.count),
-        machineDependency: Object.values(machineDependency).sort((a, b) => b.totalItems - a.totalItems),
+        sectorBreakdown: buildSectorBreakdown(items, expiredReagentIds),
+        storageUtilization: buildStorageUtilization(items),
+        machineDependency: buildMachineDependency(items, expiredReagentIds),
       }
     };
-  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
-}
-
-// ============ DASHBOARD 3: ACTIVITY & AUDIT ============
-
-export async function getActivityOverview(dateRange = '30d') {
-  return withAuth(async (user, supabase) => {
-    const startDate = getStartDate(dateRange);
-
-    const { data: movements, error } = await supabase
-      .from("stock_movements")
-      .select("id, movement_type, quantity, performed_at, notes, lot_id, lots(lot_number, reagents(name)), profiles:performed_by(full_name, email)")
-      .gte("performed_at", startDate)
-      .order("performed_at", { ascending: false });
-
-    if (error) throw error;
-
-    const items = movements || [];
-
-    // Daily activity
-    const dailyActivity = {};
-    for (const m of items) {
-      const date = m.performed_at.split('T')[0];
-      if (!dailyActivity[date]) {
-        dailyActivity[date] = { date, in: 0, out: 0, adjustment: 0, expired: 0, damaged: 0 };
-      }
-      dailyActivity[date][m.movement_type]++;
-    }
-
-    // Activity by type
-    const byType = {};
-    for (const m of items) {
-      if (!byType[m.movement_type]) byType[m.movement_type] = 0;
-      byType[m.movement_type]++;
-    }
-
-    // Top active users
-    const byUser = {};
-    for (const m of items) {
-      const name = m.profiles?.full_name || m.profiles?.email || 'Unknown';
-      if (!byUser[name]) byUser[name] = 0;
-      byUser[name]++;
-    }
-    const topUsers = Object.entries(byUser)
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10);
-
-    // Most active day
-    const dailyArray = Object.values(dailyActivity);
-    let mostActiveDay = null;
-    if (dailyArray.length > 0) {
-      mostActiveDay = dailyArray.reduce((max, day) => {
-        const dayTotal = day.in + day.out + day.adjustment + day.expired + day.damaged;
-        const maxTotal = max.in + max.out + max.adjustment + max.expired + max.damaged;
-        return dayTotal > maxTotal ? day : max;
-      });
-    }
-
-    return {
-      success: true,
-      data: {
-        totalMovements: items.length,
-        mostActiveDay,
-        dailyActivity: Object.values(dailyActivity).sort((a, b) => a.date.localeCompare(b.date)),
-        byType: Object.entries(byType).map(([type, count]) => ({ type, count })),
-        topUsers,
-      }
-    };
-  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
-}
-
-export async function getLotLifecycleStats() {
-  return withAuth(async (user, supabase) => {
-    const { data: depletedLots, error: lErr } = await supabase
-      .from("lots")
-      .select("id, date_of_reception")
-      .eq("is_active", true)
-      .eq("quantity", 0);
-
-    if (lErr) throw lErr;
-
-    if (!depletedLots || depletedLots.length === 0) {
-      return { success: true, data: { avgDays: null, medianDays: null, count: 0 } };
-    }
-
-    const lotIds = depletedLots.map(l => l.id);
-
-    // Get last stock_out movements for depleted lots
-    const { data: lastMovements, error: mErr } = await supabase
-      .from("stock_movements")
-      .select("lot_id, performed_at")
-      .in("lot_id", lotIds)
-      .eq("movement_type", "out")
-      .order("performed_at", { ascending: false });
-
-    if (mErr) throw mErr;
-
-    const lastMovementByLot = {};
-    for (const m of (lastMovements || [])) {
-      if (!lastMovementByLot[m.lot_id]) {
-        lastMovementByLot[m.lot_id] = m.performed_at;
-      }
-    }
-
-    const durations = depletedLots
-      .filter(l => lastMovementByLot[l.id])
-      .map(l => {
-        const reception = new Date(l.date_of_reception);
-        const depletion = new Date(lastMovementByLot[l.id]);
-        return Math.ceil((depletion - reception) / (1000 * 60 * 60 * 24));
-      })
-      .filter(d => d > 0)
-      .sort((a, b) => a - b);
-
-    if (durations.length === 0) {
-      return { success: true, data: { avgDays: null, medianDays: null, count: 0 } };
-    }
-
-    const avgDays = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length);
-    const medianDays = durations[Math.floor(durations.length / 2)];
-
-    return { success: true, data: { avgDays, medianDays, count: durations.length } };
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error) }));
 }
 
 // ============ AUDIT LOGS ============
 
+/**
+ * Queries the immutable audit_logs table with filtering, search, and pagination.
+ * Used by the ActivityAuditDashboard.
+ *
+ * Params are validated against `auditLogQuerySchema` before the query runs:
+ *   - page (default 1), limit (default 20, max 100)
+ *   - search — ilike match on description and action columns
+ *   - action — exact match (e.g. "stock_in", "create_reagent")
+ *   - resourceType — exact match (e.g. "reagent", "lot", "user")
+ *   - userId — exact match on user_id
+ *   - dateRange — '7d'|'30d'|'90d'|'6m'
+ *
+ * Each log is returned with a joined `profiles` object (full_name, email).
+ *
+ * @param {Object} params - Query parameters (all optional)
+ * @returns {{ success, data: Array, pagination: { page, limit, total, hasMore } }}
+ */
 export async function getAuditLogs(params = {}) {
   const validated = validateWithSchema(auditLogQuerySchema, params);
   if (!validated.success) return validated;
 
-  const { page, limit, search, resourceType } = validated.data;
+  const { page, limit, search, resourceType, action, dateRange, userId } = validated.data;
 
   return withAuth(async (user, supabase) => {
     let query = supabase
@@ -455,6 +358,19 @@ export async function getAuditLogs(params = {}) {
 
     if (resourceType) {
       query = query.eq("resource_type", resourceType);
+    }
+
+    if (action) {
+      query = query.eq("action", action);
+    }
+
+    if (userId) {
+      query = query.eq("user_id", userId);
+    }
+
+    if (dateRange) {
+      const startDate = getStartDate(dateRange);
+      query = query.gte("performed_at", startDate);
     }
 
     if (search) {
@@ -481,16 +397,4 @@ export async function getAuditLogs(params = {}) {
       },
     };
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: [], pagination: { page: 1, limit: 20, total: 0, hasMore: false } }));
-}
-
-export async function getAuditLogCount() {
-  return withAuth(async (user, supabase) => {
-    const { count, error } = await supabase
-      .from("audit_logs")
-      .select("id", { count: 'exact', head: true });
-
-    if (error) throw error;
-
-    return { success: true, count: count || 0 };
-  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), count: 0 }));
 }

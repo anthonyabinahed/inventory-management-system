@@ -192,12 +192,15 @@ export default function InventoryCompositionDashboard() {
             </div>
           }
         >
-          {breakdownView === 'sector' ? (
-            sectorBreakdown.length > 0 ? (
-              <ResponsiveContainer width="100%" height={Math.max(200, sectorBreakdown.length * 50)}>
-                <BarChart data={sectorBreakdown} layout="vertical" margin={{ left: 10, right: 20 }}>
+          {(() => {
+            const chartConfig = breakdownView === 'sector'
+              ? { data: sectorBreakdown, dataKey: 'sector', emptyMsg: 'No sector data' }
+              : { data: machineDependency, dataKey: 'machine', emptyMsg: 'No machine data' };
+            return chartConfig.data.length > 0 ? (
+              <ResponsiveContainer width="100%" height={Math.max(200, chartConfig.data.length * 50)}>
+                <BarChart data={chartConfig.data} layout="vertical" margin={{ left: 10, right: 20 }}>
                   <XAxis type="number" tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="sector" width={130} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey={chartConfig.dataKey} width={130} tick={{ fontSize: 11 }} />
                   <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }} />
                   <Legend iconSize={8} wrapperStyle={{ fontSize: '12px' }} />
                   <Bar dataKey="totalItems" fill={CHART_COLORS.primary} name="Total Items" radius={[0, 4, 4, 0]} />
@@ -206,27 +209,10 @@ export default function InventoryCompositionDashboard() {
               </ResponsiveContainer>
             ) : (
               <div className="flex items-center justify-center h-[200px] text-base-content/40 text-sm">
-                No sector data
+                {chartConfig.emptyMsg}
               </div>
-            )
-          ) : (
-            machineDependency.length > 0 ? (
-              <ResponsiveContainer width="100%" height={Math.max(200, machineDependency.length * 50)}>
-                <BarChart data={machineDependency} layout="vertical" margin={{ left: 10, right: 20 }}>
-                  <XAxis type="number" tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="machine" width={130} tick={{ fontSize: 11 }} />
-                  <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }} />
-                  <Legend iconSize={8} wrapperStyle={{ fontSize: '12px' }} />
-                  <Bar dataKey="totalItems" fill={CHART_COLORS.primary} name="Total Items" radius={[0, 4, 4, 0]} />
-                  <Bar dataKey="alertItems" fill={CHART_COLORS.error} name="Alert Items" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-[200px] text-base-content/40 text-sm">
-                No machine data
-              </div>
-            )
-          )}
+            );
+          })()}
         </ChartCard>
 
         {storageUtilization.length > 0 && (

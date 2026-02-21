@@ -114,6 +114,9 @@ export const auditLogQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().optional(),
   resourceType: z.string().optional(),
+  action: z.string().optional(),
+  dateRange: z.string().optional(),
+  userId: z.string().min(1).optional(),
 });
 
 // ============ ADMIN SCHEMAS ============

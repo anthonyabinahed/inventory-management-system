@@ -1,13 +1,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { TrendingUp, TrendingDown, ArrowUpDown, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
 import {
   BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer,
   Legend
 } from "recharts";
 import {
-  getMovementTrends, getTopConsumedItems, getBurnRateData, getSectorConsumption, getMachineConsumption
+  getMovementTrends, getTopConsumedItems, getSectorConsumption, getMachineConsumption
 } from "@/actions/analytics";
 import { getFilterOptions } from "@/actions/inventory";
 import { StatCard } from "./shared/StatCard";
@@ -18,10 +18,11 @@ import { CHART_COLORS, CATEGORY_COLORS } from "./shared/chartColors";
 export default function ConsumptionDashboard() {
   const [dateRange, setDateRange] = useState('30d');
   const [sector, setSector] = useState('');
+  const [machine, setMachine] = useState('');
   const [sectors, setSectors] = useState([]);
+  const [machines, setMachines] = useState([]);
   const [trends, setTrends] = useState(null);
   const [topConsumed, setTopConsumed] = useState([]);
-  const [burnRate, setBurnRate] = useState(null);
   const [sectorData, setSectorData] = useState([]);
   const [machineData, setMachineData] = useState([]);
   const [consumptionView, setConsumptionView] = useState('sector');
@@ -31,7 +32,10 @@ export default function ConsumptionDashboard() {
   // Load filter options once
   useEffect(() => {
     getFilterOptions().then(res => {
-      if (res.success) setSectors(res.data?.sectors || []);
+      if (res.success) {
+        setSectors(res.data?.sectors || []);
+        setMachines(res.data?.machines || []);
+      }
     });
   }, []);
 
@@ -39,22 +43,19 @@ export default function ConsumptionDashboard() {
     setIsLoading(true);
     setError(null);
     try {
-      const [trendsRes, topRes, burnRes, sectorRes, machineRes] = await Promise.all([
-        getMovementTrends(dateRange, sector || null),
+      const [trendsRes, topRes, sectorRes, machineRes] = await Promise.all([
+        getMovementTrends(dateRange, sector || null, machine || null),
         getTopConsumedItems(dateRange, 10),
-        getBurnRateData(),
         getSectorConsumption(dateRange),
         getMachineConsumption(dateRange),
       ]);
       if (!trendsRes.success) throw new Error(trendsRes.errorMessage);
       if (!topRes.success) throw new Error(topRes.errorMessage);
-      if (!burnRes.success) throw new Error(burnRes.errorMessage);
       if (!sectorRes.success) throw new Error(sectorRes.errorMessage);
       if (!machineRes.success) throw new Error(machineRes.errorMessage);
 
       setTrends(trendsRes.data);
       setTopConsumed(topRes.data);
-      setBurnRate(burnRes.data);
       setSectorData(sectorRes.data);
       setMachineData(machineRes.data);
     } catch (err) {
@@ -62,7 +63,7 @@ export default function ConsumptionDashboard() {
     } finally {
       setIsLoading(false);
     }
-  }, [dateRange, sector]);
+  }, [dateRange, sector, machine]);
 
   useEffect(() => {
     loadData();
@@ -85,7 +86,7 @@ export default function ConsumptionDashboard() {
     );
   }
 
-  if (!trends || !burnRate) return null;
+  if (!trends) return null;
 
   const { trends: trendData, totalIn, totalOut } = trends;
   const netChange = totalIn - totalOut;
@@ -93,7 +94,7 @@ export default function ConsumptionDashboard() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
         <StatCard
           icon={TrendingUp} label="Stock In" value={totalIn.toLocaleString()}
           subtitle={`Units received (${dateRange})`}
@@ -110,12 +111,6 @@ export default function ConsumptionDashboard() {
           subtitle="In minus out"
           bgColor={netChange >= 0 ? "bg-success/10" : "bg-error/10"}
           textColor={netChange >= 0 ? "text-success" : "text-error"}
-        />
-        <StatCard
-          icon={AlertTriangle} label="Critical Supply" value={burnRate.criticalCount}
-          subtitle="Items with < 14 days supply"
-          borderColor={burnRate.criticalCount > 0 ? "border-error" : undefined}
-          bgColor="bg-error/10" textColor="text-error"
         />
       </div>
 
@@ -134,6 +129,16 @@ export default function ConsumptionDashboard() {
               <option value="">All Sectors</option>
               {sectors.map((s) => (
                 <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <select
+              className="select select-bordered select-xs sm:select-sm w-auto"
+              value={machine}
+              onChange={(e) => setMachine(e.target.value)}
+            >
+              <option value="">All Machines</option>
+              {machines.map((m) => (
+                <option key={m} value={m}>{m}</option>
               ))}
             </select>
           </div>
@@ -157,7 +162,7 @@ export default function ConsumptionDashboard() {
         )}
       </ChartCard>
 
-      {/* Top Consumed + Burn Rate */}
+      {/* Top Consumed + Consumption Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Top Consumed Items" subtitle={`By stock-out quantity (${dateRange})`}>
           {topConsumed.length > 0 ? (
@@ -208,43 +213,28 @@ export default function ConsumptionDashboard() {
             </div>
           }
         >
-          {consumptionView === 'sector' ? (
-            sectorData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={Math.max(200, sectorData.length * 44)}>
-                <BarChart data={sectorData} layout="vertical" margin={{ left: 10, right: 20 }}>
+          {(() => {
+            const chartConfig = consumptionView === 'sector'
+              ? { data: sectorData, dataKey: 'sector', fill: CHART_COLORS.primary, emptyMsg: 'No sector data' }
+              : { data: machineData, dataKey: 'machine', fill: CHART_COLORS.success, emptyMsg: 'No machine data' };
+            return chartConfig.data.length > 0 ? (
+              <ResponsiveContainer width="100%" height={Math.max(200, chartConfig.data.length * 44)}>
+                <BarChart data={chartConfig.data} layout="vertical" margin={{ left: 10, right: 20 }}>
                   <XAxis type="number" tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="sector" width={130} tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey={chartConfig.dataKey} width={130} tick={{ fontSize: 11 }} />
                   <Tooltip
                     formatter={(value) => [value.toLocaleString(), "Units"]}
                     contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
                   />
-                  <Bar dataKey="totalOut" fill={CHART_COLORS.primary} name="Units Consumed" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="totalOut" fill={chartConfig.fill} name="Units Consumed" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex items-center justify-center h-[200px] text-base-content/40 text-sm">
-                No sector data
+                {chartConfig.emptyMsg}
               </div>
-            )
-          ) : (
-            machineData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={Math.max(200, machineData.length * 44)}>
-                <BarChart data={machineData} layout="vertical" margin={{ left: 10, right: 20 }}>
-                  <XAxis type="number" tick={{ fontSize: 11 }} />
-                  <YAxis type="category" dataKey="machine" width={130} tick={{ fontSize: 11 }} />
-                  <Tooltip
-                    formatter={(value) => [value.toLocaleString(), "Units"]}
-                    contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '12px' }}
-                  />
-                  <Bar dataKey="totalOut" fill={CHART_COLORS.success} name="Units Consumed" radius={[0, 4, 4, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex items-center justify-center h-[200px] text-base-content/40 text-sm">
-                No machine data
-              </div>
-            )
-          )}
+            );
+          })()}
         </ChartCard>
       </div>
     </div>

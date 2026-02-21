@@ -5,69 +5,120 @@
  * Creates the first admin user for the laboratory stock management system.
  *
  * Usage:
-SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU \
-ADMIN_EMAIL=anthonyabinahed@gmail.com ADMIN_PASSWORD=12345678 ADMIN_NAME="Anthony Nahed" \
-npm run create-admin
+ *   npm run create-admin -- --local            # uses .env.local
+ *   npm run create-admin -- --staging          # uses .env.staging
+ *
+ * You can pre-set credentials via env vars to skip prompts:
+ *   ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=secret ADMIN_NAME="Admin" \
+ *     npm run create-admin -- --staging
  */
 
+const fs = require("fs");
+const path = require("path");
+const readline = require("readline");
 const { createClient } = require("@supabase/supabase-js");
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-const ADMIN_NAME = process.env.ADMIN_NAME || "";
-
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  process.exit(1);
+// --- Parse .env file ---
+function parseEnvFile(filePath) {
+  const vars = {};
+  const content = fs.readFileSync(filePath, "utf-8");
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIndex = trimmed.indexOf("=");
+    if (eqIndex === -1) continue;
+    vars[trimmed.slice(0, eqIndex).trim()] = trimmed.slice(eqIndex + 1).trim();
+  }
+  return vars;
 }
 
-const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-  auth: { autoRefreshToken: false, persistSession: false },
-});
-
-async function createAdmin() {
-  // Try to create the user first
-  const { data, error } = await supabaseAdmin.auth.admin.createUser({
-    email: ADMIN_EMAIL,
-    password: ADMIN_PASSWORD,
-    email_confirm: true,
-    user_metadata: {
-      role: "admin",
-      full_name: ADMIN_NAME,
+// --- Prompt helper ---
+function createPrompt() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+  return {
+    ask(question) {
+      return new Promise((resolve) => rl.question(question, resolve));
     },
+    close() {
+      rl.close();
+    },
+  };
+}
+
+// --- Resolve Supabase config from --local / --staging flag ---
+function resolveConfig() {
+  const ENV_MAP = {
+    "--local": ".env.local",
+    "--staging": ".env.staging",
+  };
+
+  const envFlag = process.argv.find((arg) => ENV_MAP[arg]);
+
+  if (!envFlag) {
+    console.error("Usage: npm run create-admin -- --local | --staging");
+    process.exit(1);
+  }
+
+  const envFile = ENV_MAP[envFlag];
+  const envPath = path.resolve(__dirname, "..", envFile);
+
+  if (!fs.existsSync(envPath)) {
+    console.error(`Environment file not found: ${envFile}`);
+    process.exit(1);
+  }
+
+  const vars = parseEnvFile(envPath);
+  const supabaseUrl = vars.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = vars.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    console.error(
+      `Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in ${envFile}`
+    );
+    process.exit(1);
+  }
+
+  return { supabaseUrl, serviceRoleKey, envName: envFlag.replace("--", "") };
+}
+
+// --- Create admin user ---
+async function createAdmin(supabaseAdmin, email, password, name) {
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { role: "admin", full_name: name },
   });
 
   let userId;
 
   if (error) {
-    // User already exists — look them up and ensure admin role
     console.log("User already exists, updating to admin...");
     const { data: users, error: listError } =
       await supabaseAdmin.auth.admin.listUsers();
     if (listError) throw listError;
 
-    const existingUser = users.users.find((u) => u.email === ADMIN_EMAIL);
+    const existingUser = users.users.find((u) => u.email === email);
     if (!existingUser) throw new Error("Could not find existing user");
 
     userId = existingUser.id;
 
-    // Update user metadata to include admin role
     const { error: updateAuthError } =
       await supabaseAdmin.auth.admin.updateUserById(userId, {
-        user_metadata: { role: "admin", full_name: ADMIN_NAME },
+        user_metadata: { role: "admin", full_name: name },
       });
     if (updateAuthError) throw updateAuthError;
   } else {
     userId = data.user.id;
   }
 
-  // Upsert the profile to ensure it exists with admin role
   const { error: upsertError } = await supabaseAdmin
     .from("profiles")
     .upsert(
-      { id: userId, email: ADMIN_EMAIL, role: "admin", full_name: ADMIN_NAME },
+      { id: userId, email, role: "admin", full_name: name },
       { onConflict: "id" }
     );
 
@@ -75,17 +126,48 @@ async function createAdmin() {
     console.warn("Could not upsert profile:", upsertError.message);
   }
 
-  return { id: userId, email: ADMIN_EMAIL };
+  return { id: userId, email };
 }
 
-createAdmin()
-  .then((user) => {
-    console.log("Admin created successfully");
-    console.log("Email:", ADMIN_EMAIL);
-    console.log("Name:", ADMIN_NAME || "(not set)");
+// --- Main ---
+async function main() {
+  const { supabaseUrl, serviceRoleKey, envName } = resolveConfig();
+
+  console.log(`\nEnvironment: ${envName}`);
+  console.log(`Supabase URL: ${supabaseUrl}\n`);
+
+  const prompt = createPrompt();
+
+  try {
+    const email =
+      process.env.ADMIN_EMAIL || (await prompt.ask("Admin email: "));
+    const password =
+      process.env.ADMIN_PASSWORD || (await prompt.ask("Admin password: "));
+    const name =
+      process.env.ADMIN_NAME ?? (await prompt.ask("Admin full name: "));
+
+    prompt.close();
+
+    if (!email || !password) {
+      console.error("Email and password are required.");
+      process.exit(1);
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
+
+    const user = await createAdmin(supabaseAdmin, email, password, name);
+
+    console.log("\nAdmin created successfully");
+    console.log("Email:", user.email);
+    console.log("Name:", name || "(not set)");
     console.log("User ID:", user.id);
-  })
-  .catch((error) => {
+  } catch (error) {
+    prompt.close();
     console.error("Error creating admin:", error.message);
     process.exit(1);
-  });
+  }
+}
+
+main();

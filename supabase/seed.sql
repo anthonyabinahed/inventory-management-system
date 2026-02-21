@@ -2,6 +2,9 @@
 -- Production-realistic data based on real order sheets
 -- Sectors: Prenatal Screening, Immunohematology, Serology, Urinalysis, Quality Assessment
 
+-- Required for crypt() / gen_salt() used below (pre-loaded locally, not on hosted Supabase)
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions;
+
 DO $$
 DECLARE
   seed_user_id UUID;
@@ -82,7 +85,7 @@ BEGIN
     '00000000-0000-0000-0000-000000000000'::UUID,
     'authenticated', 'authenticated',
     'admin@lab.local',
-    crypt('12345678', gen_salt('bf')),
+    extensions.crypt('12345678', extensions.gen_salt('bf')),
     NOW(),
     '{"provider":"email","providers":["email"]}'::jsonb,
     '{"role":"admin","full_name":"Seed Admin"}'::jsonb,
