@@ -31,7 +31,7 @@ export default function ReagentTable({
   }
 
   return (
-    <div className="card bg-base-100 shadow-xl overflow-hidden relative">
+    <div className="card bg-base-100 shadow-xl relative">
       {isFiltering && (
         <div className="absolute inset-0 bg-base-100/60 z-10 flex items-center justify-center">
           <span className="loading loading-spinner loading-md"></span>
@@ -44,10 +44,10 @@ export default function ReagentTable({
               <th className="w-10 text-center">#</th>
               <th className="w-8"></th>
               <th>Name</th>
-              <th className="hidden md:table-cell">Reference</th>
+              <th className="hidden md:table-cell w-40">Reference</th>
               <th className="hidden xl:table-cell">Supplier</th>
               <th>Total Qty</th>
-              <th className="hidden lg:table-cell">Location</th>
+              <th className="hidden lg:table-cell w-24">Location</th>
               <th className="hidden xl:table-cell">Machine</th>
               <th className="text-right">Actions</th>
             </tr>
