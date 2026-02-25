@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, RefreshCw } from "lucide-react";
+import { Plus, RefreshCw, Download } from "lucide-react";
 import toast from "react-hot-toast";
 import {
   getReagents,
@@ -13,6 +13,7 @@ import ReagentFilters from "./inventory/ReagentFilters";
 import ReagentModal from "./inventory/ReagentModal";
 import StockHistoryModal from "./inventory/StockHistoryModal";
 import Pagination from "./inventory/Pagination";
+import ExportModal from "./inventory/ExportModal";
 
 const DEFAULT_FILTERS = {
   search: '',
@@ -40,7 +41,60 @@ export function Inventory({ initialFilters = {} }) {
   const [isFiltering, setIsFiltering] = useState(false);
   const [expandedReagentId, setExpandedReagentId] = useState(null);
 
+  // Export job polling
+  const [activeExportJobId, setActiveExportJobId] = useState(null);
+
+  useEffect(() => {
+    if (!activeExportJobId) return;
+
+    const TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
+    const startedAt = Date.now();
+    const toastId = toast.loading("Preparing your export…");
+    let stopped = false;
+
+    const stop = (fn) => {
+      stopped = true;
+      clearInterval(interval);
+      fn();
+      setActiveExportJobId(null);
+    };
+
+    const poll = async () => {
+      if (Date.now() - startedAt > TIMEOUT_MS) {
+        stop(() => toast.error("Export timed out. Please try again.", { id: toastId }));
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/export/status/${activeExportJobId}`);
+        const body = await res.json();
+
+        if (body.status === "completed") {
+          const a = document.createElement("a");
+          a.href = body.downloadUrl;
+          a.download = `inventory-export-${new Date().toISOString().split("T")[0]}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          stop(() => toast.success("Export downloaded successfully", { id: toastId }));
+        } else if (body.status === "failed") {
+          stop(() => toast.error(body.errorMessage || "Export failed. Please try again.", { id: toastId }));
+        }
+      } catch {
+        // Network hiccup — keep polling
+      }
+    };
+
+    poll();
+    const interval = setInterval(poll, 3000);
+    return () => {
+      clearInterval(interval);
+      if (!stopped) toast.dismiss(toastId);
+    };
+  }, [activeExportJobId]);
+
   // Modal state
+  const [showExportModal, setShowExportModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingReagent, setEditingReagent] = useState(null);
   const [viewingReagent, setViewingReagent] = useState(null);
@@ -194,12 +248,19 @@ export function Inventory({ initialFilters = {} }) {
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
           <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setShowExportModal(true)}
+            title="Export to Excel"
+          >
+            <Download className="h-4 w-4" />
+            <span className="hidden sm:inline">Export</span>
+          </button>
+          <button
             className="btn btn-primary btn-sm"
             onClick={() => setShowAddModal(true)}
           >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Add</span>
-            <span className="sm:hidden">Add</span>
           </button>
         </div>
       </div>
@@ -246,6 +307,14 @@ export function Inventory({ initialFilters = {} }) {
         onClose={() => setHistoryReagent(null)}
         reagent={historyReagent}
       />
+
+      {/* Export Modal */}
+      {showExportModal && (
+        <ExportModal
+          onClose={() => setShowExportModal(false)}
+          onExportStarted={(jobId) => setActiveExportJobId(jobId)}
+        />
+      )}
     </div>
   );
 }

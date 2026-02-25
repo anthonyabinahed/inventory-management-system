@@ -31,6 +31,19 @@ export default defineConfig(({ mode }) => {
           },
         },
 
+        // API route tests — real Supabase (mock only Next.js framework)
+        {
+          extends: true,
+          test: {
+            name: 'api',
+            environment: 'node',
+            include: ['tests/api/**/*.test.{js,jsx}'],
+            setupFiles: ['./tests/setup-integration.js'],
+            testTimeout: 15000,
+            fileParallelism: false,
+          },
+        },
+
         // Integration tests — RLS, DB integrity, auth, inventory (real Supabase)
         {
           extends: true,

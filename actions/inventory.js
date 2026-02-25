@@ -8,8 +8,12 @@ import { logAuditEvent } from "@/libs/audit";
 // ============ HELPER FUNCTIONS ============
 
 /**
- * Recalculate and update total_quantity for a reagent based on its active lots
- * This should be called after any lot quantity changes (stockIn, stockOut, deleteLot)
+ * Recalculate and update total_quantity for a reagent based on its active lots.
+ * Call after any lot quantity change (stockIn, stockOut, deleteLot).
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {string} reagentId
+ * @param {string} userId - Written to reagent's `updated_by` field
+ * @returns {Promise<number>} The new total_quantity
  */
 async function recalculateReagentTotalQuantity(supabase, reagentId, userId) {
   // Sum quantities from all active lots for this reagent
@@ -40,8 +44,21 @@ async function recalculateReagentTotalQuantity(supabase, reagentId, userId) {
 // ============ REAGENT CRUD OPERATIONS ============
 
 /**
- * Get all reagents with optional filtering and pagination
- * Returns master reagent data with total_quantity (aggregated from lots)
+ * Get all reagents with optional filtering and pagination.
+ * Returns master reagent data with total_quantity (aggregated from lots).
+ * @param {object} [opts]
+ * @param {number} [opts.page=1]
+ * @param {number} [opts.limit=25]
+ * @param {object} [opts.filters={}]
+ * @param {string}  [opts.filters.category]
+ * @param {string}  [opts.filters.sector]
+ * @param {string}  [opts.filters.machine]
+ * @param {string}  [opts.filters.supplier]       - Partial match
+ * @param {string}  [opts.filters.storage_location] - Partial match
+ * @param {string}  [opts.filters.search]         - Matches name, reference, or description
+ * @param {boolean} [opts.filters.lowStock]        - Only reagents at or below minimum_stock
+ * @param {boolean} [opts.filters.hasExpiredLots]  - Only reagents with at least one expired lot
+ * @returns {Promise<{success: boolean, data: object[], pagination: object, errorMessage?: string}>}
  */
 export async function getReagents({
   page = 1,
@@ -150,7 +167,9 @@ export async function getReagents({
 }
 
 /**
- * Get a single reagent by ID
+ * Get a single reagent by ID.
+ * @param {string} id - Reagent UUID
+ * @returns {Promise<{success: boolean, data?: object, errorMessage?: string}>}
  */
 export async function getReagentById(id) {
   return withAuth(async (user, supabase) => {
@@ -167,8 +186,10 @@ export async function getReagentById(id) {
 }
 
 /**
- * Create a new reagent (master data only)
- * New reagents start with total_quantity = 0
+ * Create a new reagent (master data only).
+ * New reagents start with total_quantity = 0; stock is added via stockIn.
+ * @param {object} reagentData - Validated against `reagentSchema`
+ * @returns {Promise<{success: boolean, data?: object, errorMessage?: string}>}
  */
 export async function createReagent(reagentData) {
   const validated = validateWithSchema(reagentSchema, reagentData);
@@ -200,7 +221,11 @@ export async function createReagent(reagentData) {
 }
 
 /**
- * Update an existing reagent (master data only)
+ * Update an existing reagent (master data only).
+ * Does not touch lot quantities; use stockIn/stockOut for that.
+ * @param {string} id - Reagent UUID
+ * @param {object} updates - Validated against `reagentUpdateSchema`
+ * @returns {Promise<{success: boolean, data?: object, errorMessage?: string}>}
  */
 export async function updateReagent(id, updates) {
   const validated = validateWithSchema(reagentUpdateSchema, updates);
@@ -231,7 +256,9 @@ export async function updateReagent(id, updates) {
 }
 
 /**
- * Soft delete a reagent (and its lots via cascade)
+ * Soft delete a reagent and all its lots (sets is_active = false on both).
+ * @param {string} id - Reagent UUID
+ * @returns {Promise<{success: boolean, errorMessage?: string}>}
  */
 export async function deleteReagent(id) {
   return withAuth(async (user, supabase) => {
@@ -270,36 +297,76 @@ export async function deleteReagent(id) {
 // ============ LOT OPERATIONS ============
 
 /**
- * Get all lots for a reagent
+ * Get lots for a reagent, with server-side filtering and pagination.
+ * @param {string} reagentId
+ * @param {object} opts
+ * @param {boolean} opts.includeInactive - Include soft-deleted lots (default: false)
+ * @param {boolean} opts.hideOutOfStock  - Exclude lots with quantity <= 0 (default: false)
+ * @param {boolean} opts.hideExpired     - Exclude lots past their expiry date (default: false)
+ * @param {number}  opts.page            - Page number, 1-indexed (default: 1)
+ * @param {number}  opts.limit           - Lots per page (default: 7)
  */
-export async function getLotsForReagent(reagentId, { includeEmpty = true, includeInactive = false } = {}) {
+export async function getLotsForReagent(
+  reagentId,
+  { includeInactive = false, hideOutOfStock = false, hideExpired = false, page = 1, limit = 7 } = {}
+) {
   return withAuth(async (user, supabase) => {
     let query = supabase
       .from("lots")
-      .select("*")
+      .select("*", { count: "exact" })
       .eq("reagent_id", reagentId)
-      .order("expiry_date", { ascending: true });
+      // Expired lots (past dates) sort first because dates are smallest;
+      // null expiry goes last (NULLS LAST). Matches the previous client-side sort.
+      .order("expiry_date", { ascending: true, nullsFirst: false });
 
     if (!includeInactive) {
       query = query.eq("is_active", true);
     }
 
-    if (!includeEmpty) {
+    if (hideOutOfStock) {
       query = query.gt("quantity", 0);
     }
 
-    const { data, error } = await query;
+    if (hideExpired) {
+      const today = new Date().toISOString().split("T")[0];
+      // Keep lots with no expiry date OR expiry date >= today
+      query = query.or(`expiry_date.is.null,expiry_date.gte.${today}`);
+    }
+
+    const offset = (page - 1) * limit;
+    query = query.range(offset, offset + limit - 1);
+
+    const { data, count, error } = await query;
 
     if (error) throw error;
 
-    return { success: true, data: data || [] };
-  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: [] }));
+    const total = count ?? 0;
+    return {
+      success: true,
+      data: data || [],
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: [], pagination: null }));
 }
 
 /**
- * Stock In - Add stock to existing lot or create new lot
- * If lot_number exists for reagent, adds to quantity (keeps original expiry)
- * If new lot_number, creates new lot record
+ * Stock In — add stock to an existing lot or create a new lot.
+ * If lot_number already exists for the reagent, quantity is added and the
+ * original expiry date is preserved. Otherwise a new lot row is created.
+ * Recalculates the reagent's total_quantity when done.
+ * @param {object} params - Validated against `stockInSchema`
+ * @param {string} params.reagent_id
+ * @param {string} params.lot_number
+ * @param {number} params.quantity
+ * @param {string} [params.expiry_date]        - ISO date; ignored when adding to existing lot
+ * @param {string} [params.date_of_reception]  - ISO date; defaults to today
+ * @param {string} [params.notes]
+ * @returns {Promise<{success: boolean, data?: object, action?: 'created'|'updated', errorMessage?: string}>}
  */
 export async function stockIn(params) {
   const validated = validateWithSchema(stockInSchema, params);
@@ -395,7 +462,14 @@ export async function stockIn(params) {
 }
 
 /**
- * Stock Out - Remove stock from a specific lot
+ * Stock Out — remove stock from a specific lot.
+ * Returns an error if the requested quantity exceeds the lot's current stock.
+ * Recalculates the reagent's total_quantity when done.
+ * @param {string} lotId   - Lot UUID
+ * @param {number} quantity - Amount to remove (must be > 0 and <= lot.quantity)
+ * @param {object} [opts]
+ * @param {string} [opts.notes]
+ * @returns {Promise<{success: boolean, newQuantity?: number, errorMessage?: string}>}
  */
 export async function stockOut(lotId, quantity, opts = {}) {
   const validated = validateWithSchema(stockOutSchema, { quantity, ...opts });
@@ -454,7 +528,10 @@ export async function stockOut(lotId, quantity, opts = {}) {
 
 
 /**
- * Soft delete a lot
+ * Soft delete a lot (sets is_active = false).
+ * Recalculates the parent reagent's total_quantity when done.
+ * @param {string} lotId - Lot UUID
+ * @returns {Promise<{success: boolean, errorMessage?: string}>}
  */
 export async function deleteLot(lotId) {
   return withAuth(async (user, supabase) => {
@@ -492,8 +569,19 @@ export async function deleteLot(lotId) {
 // ============ STOCK MOVEMENT LOGGING ============
 
 /**
- * Internal helper to log stock movements
- * Called from within withAuth context, so user and supabase are passed in
+ * Internal helper to log a row to the stock_movements table.
+ * Errors are swallowed (logged to console) so a logging failure never aborts
+ * the parent transaction.
+ * @param {import('@supabase/supabase-js').SupabaseClient} supabase
+ * @param {string} userId
+ * @param {object} movementData
+ * @param {string} movementData.lot_id
+ * @param {'in'|'out'} movementData.movement_type
+ * @param {number} movementData.quantity         - Negative for stock-out movements
+ * @param {number} movementData.quantity_before
+ * @param {number} movementData.quantity_after
+ * @param {string} [movementData.notes]
+ * @returns {Promise<void>}
  */
 async function logStockMovement(supabase, userId, movementData) {
   try {
@@ -509,8 +597,13 @@ async function logStockMovement(supabase, userId, movementData) {
 }
 
 /**
- * Get stock movement history for all lots of a reagent
- * Joins through lots table since stock_movements only has lot_id
+ * Get stock movement history for all lots of a reagent.
+ * Joins through the lots table (stock_movements only stores lot_id) and
+ * includes the performer's profile data.
+ * @param {string} reagentId - Reagent UUID
+ * @param {object} [opts]
+ * @param {number} [opts.limit=100] - Max movements to return (most recent first)
+ * @returns {Promise<{success: boolean, data: object[], errorMessage?: string}>}
  */
 export async function getReagentStockHistory(reagentId, { limit = 100 } = {}) {
   return withAuth(async (user, supabase) => {
@@ -555,7 +648,10 @@ export async function getReagentStockHistory(reagentId, { limit = 100 } = {}) {
 // ============ ALERTS & STATISTICS ============
 
 /**
- * Get reagents with low stock (total_quantity <= minimum_stock)
+ * Get all active reagents where total_quantity <= minimum_stock.
+ * Note: column comparison is not supported by PostgREST, so filtering is
+ * done client-side after fetching all active reagents.
+ * @returns {Promise<{success: boolean, data: object[], errorMessage?: string}>}
  */
 export async function getLowStockReagents() {
   return withAuth(async (user, supabase) => {
@@ -575,7 +671,9 @@ export async function getLowStockReagents() {
 
 
 /**
- * Get count of reagents that have at least one expired lot
+ * Get the number of distinct reagents that have at least one active, non-empty,
+ * expired lot (expiry_date < today).
+ * @returns {Promise<{success: boolean, count: number, errorMessage?: string}>}
  */
 export async function getExpiredLotsCount() {
   return withAuth(async (user, supabase) => {
@@ -599,8 +697,10 @@ export async function getExpiredLotsCount() {
 }
 
 /**
- * Get expired and expiring-soon lots with reagent details
- * Returns lots where expiry_date <= today + 30 days (WARNING_DAYS threshold)
+ * Get active, non-empty lots that have expired or will expire within 30 days,
+ * joined with their parent reagent's name, reference, and unit.
+ * Results are sorted by expiry_date ascending (soonest first).
+ * @returns {Promise<{success: boolean, data: object[], errorMessage?: string}>}
  */
 export async function getExpiredLots() {
   return withAuth(async (user, supabase) => {
@@ -636,7 +736,9 @@ export async function getExpiredLots() {
 }
 
 /**
- * Get filter options (unique values for dropdowns)
+ * Get sorted unique values for filter dropdowns (supplier, storage_location,
+ * sector, machine, category) derived from all active reagents.
+ * @returns {Promise<{success: boolean, data: {suppliers: string[], locations: string[], sectors: string[], machines: string[], categories: string[]}, errorMessage?: string}>}
  */
 export async function getFilterOptions() {
   return withAuth(async (user, supabase) => {
@@ -734,7 +836,11 @@ export async function searchReagents(query, category) {
 }
 
 /**
- * Check if a lot number exists for a reagent
+ * Check whether an active lot with the given lot_number already exists for a reagent.
+ * Used by the BarcodeManager before deciding to show a stock-in vs new-lot form.
+ * @param {string} reagentId
+ * @param {string} lotNumber
+ * @returns {Promise<{success: boolean, exists: boolean, lot: object|null, errorMessage?: string}>}
  */
 export async function checkLotExists(reagentId, lotNumber) {
   return withAuth(async (user, supabase) => {

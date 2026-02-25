@@ -543,8 +543,8 @@ describe('getLotsForReagent', () => {
     expect(result.data.some(l => l.is_active === false)).toBe(true);
   });
 
-  it('includeEmpty: false excludes zero-quantity lots', async () => {
-    const result = await getLotsForReagent(reagentId, { includeEmpty: false });
+  it('hideOutOfStock: true excludes zero-quantity lots', async () => {
+    const result = await getLotsForReagent(reagentId, { hideOutOfStock: true });
     expect(result.success).toBe(true);
     expect(result.data.every(l => l.quantity > 0)).toBe(true);
   });

@@ -119,6 +119,13 @@ export const auditLogQuerySchema = z.object({
   userId: z.string().min(1).optional(),
 });
 
+// ============ EXPORT SCHEMAS ============
+
+export const exportOptionsSchema = z.object({
+  include_empty_lots: z.boolean().default(true),
+  include_expired_lots: z.boolean().default(true),
+});
+
 // ============ ADMIN SCHEMAS ============
 
 export const inviteUserSchema = z.object({
