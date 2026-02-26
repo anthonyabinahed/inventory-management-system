@@ -4,6 +4,7 @@ import { cache } from "react";
 import { createSupabaseClient } from "@/libs/supabase/server";
 import { getSupabaseAdmin } from "@/actions/admin";
 import { sendEmail } from "@/libs/resend";
+import { buildPasswordResetHtml, buildPasswordResetText } from "@/libs/email-templates";
 import { getErrorMessage } from "@/libs/utils";
 import { loginSchema, forgotPasswordSchema, passwordSchema, validateWithSchema } from "@/libs/schemas";
 import config from "@/config";
@@ -167,47 +168,8 @@ export async function requestPasswordReset(email) {
         await sendEmail({
             to: email,
             subject: `Reset your ${config.appName} password`,
-            html: `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                </head>
-                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="text-align: center; margin-bottom: 30px;">
-                        <h1 style="color: ${config.colors.main}; margin-bottom: 10px;">${config.appName}</h1>
-                    </div>
-
-                    <h2 style="color: #333;">Reset Your Password</h2>
-
-                    <p>Hello,</p>
-
-                    <p>We received a request to reset your password for your <strong>${config.appName}</strong> account.</p>
-
-                    <p>Click the button below to set a new password:</p>
-
-                    <div style="text-align: center; margin: 30px 0;">
-                        <a href="${resetUrl}"
-                           style="display: inline-block; padding: 14px 32px; background-color: ${config.colors.main}; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
-                            Reset Password
-                        </a>
-                    </div>
-
-                    <p style="color: #666; font-size: 14px;">
-                        This link will expire in 24 hours. If you didn't request a password reset, you can safely ignore this email.
-                    </p>
-
-                    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-
-                    <p style="color: #999; font-size: 12px; text-align: center;">
-                        If the button doesn't work, copy and paste this link into your browser:<br>
-                        <a href="${resetUrl}" style="color: ${config.colors.main}; word-break: break-all;">${resetUrl}</a>
-                    </p>
-                </body>
-                </html>
-            `,
-            text: `Reset Your Password\n\nHello,\n\nWe received a request to reset your password for your ${config.appName} account.\n\nClick this link to set a new password:\n${resetUrl}\n\nThis link will expire in 24 hours. If you didn't request a password reset, you can safely ignore this email.`,
+            html: buildPasswordResetHtml({ resetUrl }),
+            text: buildPasswordResetText({ resetUrl }),
         });
 
         return { success: true, errorMessage: null };

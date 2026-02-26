@@ -18,6 +18,7 @@ Laboratory reagent and lot inventory management for Anamed.
 actions/          Server actions (withAuth wrapper, no API routes)
 app/              Next.js pages and API routes
   api/export/     Export API routes (request + status polling)
+  api/alerts/     Alert digest cron endpoint (Vercel Cron)
 components/       React components
   inventory/      LotsPanel, ReagentTable, ExportModal, Pagination, …
   analytics/      Dashboard charts and audit log
@@ -27,8 +28,11 @@ libs/             Shared utilities
   constants.js    UNITS, CATEGORIES, MOVEMENT_TYPES, helpers
   auth.js         withAuth() wrapper for server actions
   utils.js        getErrorMessage()
+  email-templates.js  Alert digest email builders (HTML + plain text)
+  resend.js       Resend email client (sendEmail)
+  queries.js      Shared DB query helpers (no "use server" — safe to import from API routes)
 supabase/
-  migrations/     SQL migrations (run in order, 00001–00007)
+  migrations/     SQL migrations (run in order, 00001–00008)
   functions/      Edge Functions (Deno 2 runtime)
     process-export/   Background Excel generation
     _shared/          Edge Function internal library (supabase.ts, excel.ts)
@@ -43,6 +47,7 @@ tests/            Vitest suites: unit, integration, actions, components
 - **Zod schemas** in `libs/schemas.js` — shared between FE and BE
   - FE: `schema.safeParse(data)` before submit, toast first error
   - BE: `validateWithSchema(schema, data)` at top of server actions
+- **Routes**: All route paths must come from `config.routes` in `config.js` — never hardcode path strings in components, middleware, or server code
 - **Server actions** use `withAuth()` from `libs/auth.js`
 - **API routes** use `createSupabaseClient()` directly (no `withAuth`)
 - **Error handling** via `getErrorMessage()` from `libs/utils.js`
@@ -55,7 +60,7 @@ tests/            Vitest suites: unit, integration, actions, components
 
 | Env        | Supabase Ref          | Site URL                          |
 |------------|-----------------------|-----------------------------------|
-| Local      | localhost:54321       | http://localhost:3000             |
+| Local      | localhost:54321       | http://localhost:3001             |
 | Staging    | xpejogsvvskpmvvfievz  | http://staging.testing-anthony.xyz |
 | Production | yzrbgdymgwlzrfhtmxyv  | https://testing-anthony.xyz       |
 
@@ -89,7 +94,7 @@ npm run functions:deploy:prod        # deploy Edge Functions to production
 supabase start                  # start local Supabase (DB, Auth, Storage, Edge Runtime)
 supabase db reset               # apply all migrations + seed data (first-time setup)
 npm run supabase:local          # apply pending migrations + serve Edge Functions (hot reload)
-npm run dev                     # Next.js dev server (http://localhost:3000)
+npm run dev                     # Next.js dev server (http://localhost:3001)
 ```
 
 `npm run supabase:local` is the everyday command after `supabase start` is already running.
@@ -131,6 +136,31 @@ Invoked by `POST /api/export/request` (fire-and-forget). Updates the `export_job
 
 Storage path pattern: `exports/{user_id}/{job_id}/inventory-export-{YYYY-MM-DD}.xlsx`
 Signed URLs expire after 1 hour.
+
+## Email Alert Architecture
+
+Daily digest emails sent to users with `profiles.receive_email_alerts = true`.
+
+```
+Vercel Cron (07:00 UTC daily, vercel.json)
+  → GET /api/alerts/send-digest (auth: CRON_SECRET bearer token)
+  → fetchLowStockReagents() + fetchExpiringLots() from actions/inventory.js
+  → buildAlertDigestHtml/Text() from libs/email-templates.js
+  → sendEmail() via Resend for each subscriber
+  → Records result in alert_notifications table (dedup: 1 email/user/day)
+```
+
+- **Admin toggle**: `updateEmailAlertPreference()` in `actions/admin.js` — controls `profiles.receive_email_alerts`
+- **Alert queries**: `fetchLowStockReagents(supabase)` and `fetchExpiringLots(supabase)` live in `libs/queries.js` (no `"use server"` — not exposed as server actions). Imported by both `actions/inventory.js` (via `withAuth`) and the API route (via service-role client)
+- **`alert_notifications` table**: tracks sent/failed digests with JSONB summary. RLS: admins read all, users read own, service role inserts
+- **`CRON_SECRET`**: Self generated SSL secret with `openssl rand -base64 32`
+
+### Local testing
+
+```bash
+curl -X GET http://localhost:3001/api/alerts/send-digest \
+  -H "Authorization: Bearer local-dev-secret"
+```
 
 ## Gotchas
 

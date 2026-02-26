@@ -40,6 +40,9 @@ export async function updateSession(request) {
 
   const path = new URL(request.url).pathname
 
+  // Public API routes that handle their own auth (e.g., Vercel Cron with CRON_SECRET)
+  const publicApiRoutes = [config.routes.api.alerts.sendDigest]
+
   // Protected route prefixes (use startsWith for nested routes)
   const protectedPrefixes = [config.routes.adminPrefix, config.routes.apiPrefix]
   // Protected exact routes
@@ -49,8 +52,10 @@ export async function updateSession(request) {
   // users need to access them while authenticated to set their password
   const authRoutes = [config.routes.login, config.routes.forgotPassword]
 
-  const isProtected = protectedPrefixes.some(prefix => path.startsWith(prefix)) ||
-                      protectedExact.includes(path)
+  const isPublicApi = publicApiRoutes.includes(path)
+  const isProtected = !isPublicApi &&
+                      (protectedPrefixes.some(prefix => path.startsWith(prefix)) ||
+                      protectedExact.includes(path))
   const isAuthRoute = authRoutes.includes(path)
 
   // Helper: create redirect response with cookies copied from supabaseResponse

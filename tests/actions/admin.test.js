@@ -31,7 +31,7 @@ vi.mock('@/libs/supabase/server', () => ({
   createSupabaseClient: vi.fn(async () => currentClient),
 }));
 
-const { verifyAdmin, inviteUser, updateUserRole, revokeUser } = await import('@/actions/admin');
+const { verifyAdmin, inviteUser, updateUserRole, revokeUser, updateEmailAlertPreference } = await import('@/actions/admin');
 const { sendEmail } = await import('@/libs/resend');
 
 let adminClient;
@@ -218,5 +218,89 @@ describe('revokeUser', () => {
       .eq('id', throwaway.id)
       .maybeSingle();
     expect(profile).toBeNull();
+  });
+});
+
+// ============ updateEmailAlertPreference ============
+
+describe('updateEmailAlertPreference', () => {
+  it('returns validation error for invalid UUID', async () => {
+    const result = await updateEmailAlertPreference('not-a-uuid', true);
+    expect(result.success).toBe(false);
+    expect(result.errorMessage).toBe('Invalid user ID');
+  });
+
+  it('returns validation error for non-boolean value', async () => {
+    const result = await updateEmailAlertPreference(
+      '550e8400-e29b-41d4-a716-446655440000',
+      'yes'
+    );
+    expect(result.success).toBe(false);
+    expect(result.errorMessage).toBeDefined();
+  });
+
+  it('blocks non-admin caller', async () => {
+    currentClient = regularClient;
+    const result = await updateEmailAlertPreference(regularUser.id, true);
+    expect(result.success).toBe(false);
+    expect(result.errorMessage).toBe('Forbidden: Admin access required');
+  });
+
+  it('blocks unauthenticated caller', async () => {
+    currentClient = getAnonClient();
+    const result = await updateEmailAlertPreference(regularUser.id, true);
+    expect(result.success).toBe(false);
+    expect(result.errorMessage).toBe('Unauthorized');
+  });
+
+  it('enables alerts when caller is admin and verifies in DB', async () => {
+    currentClient = adminClient;
+    const result = await updateEmailAlertPreference(regularUser.id, true);
+    expect(result.success).toBe(true);
+
+    const admin = getAdminClient();
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('receive_email_alerts')
+      .eq('id', regularUser.id)
+      .single();
+    expect(profile.receive_email_alerts).toBe(true);
+  });
+
+  it('disables alerts when caller is admin and verifies in DB', async () => {
+    currentClient = adminClient;
+    const result = await updateEmailAlertPreference(regularUser.id, false);
+    expect(result.success).toBe(true);
+
+    const admin = getAdminClient();
+    const { data: profile } = await admin
+      .from('profiles')
+      .select('receive_email_alerts')
+      .eq('id', regularUser.id)
+      .single();
+    expect(profile.receive_email_alerts).toBe(false);
+  });
+
+  it('creates audit log entry', async () => {
+    currentClient = adminClient;
+    await updateEmailAlertPreference(regularUser.id, true);
+
+    // Query via the same authenticated client used by the action
+    const { data: logs, error } = await adminClient
+      .from('audit_logs')
+      .select('action, resource_type, resource_id')
+      .eq('action', 'update_email_alerts')
+      .order('performed_at', { ascending: false })
+      .limit(1);
+
+    expect(error).toBeNull();
+    expect(logs).toHaveLength(1);
+    expect(logs[0].action).toBe('update_email_alerts');
+    expect(logs[0].resource_type).toBe('user');
+    expect(logs[0].resource_id).toBe(regularUser.id);
+
+    // Cleanup: disable alerts for other tests
+    const admin = getAdminClient();
+    await admin.from('profiles').update({ receive_email_alerts: false }).eq('id', regularUser.id);
   });
 });

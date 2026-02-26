@@ -21,12 +21,19 @@ const config = {
     adminPrefix: "/admin",
     apiPrefix: "/api",
     admin: {
-      dashboard: "/admin/dashboard"
+      dashboard: "/admin/dashboard",
     },
     api: {
       auth: {
         callback: "/api/auth/callback",
-      }
+      },
+      export: {
+        request: "/api/export/request",
+        status: "/api/export/status", // append /${jobId} when polling
+      },
+      alerts: {
+        sendDigest: "/api/alerts/send-digest",
+      },
     },
   },
 };

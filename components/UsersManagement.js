@@ -5,10 +5,10 @@ import { Dialog, Transition } from "@headlessui/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import toast from "react-hot-toast";
-import { Plus, Send, X } from "lucide-react";
+import { Plus, Send, X, Info } from "lucide-react";
 import { getCurrentUser } from "@/actions/auth";
 import { getAllUsers } from "@/actions/users";
-import { inviteUser, revokeUser, updateUserRole } from "@/actions/admin";
+import { inviteUser, revokeUser, updateUserRole, updateEmailAlertPreference } from "@/actions/admin";
 import { inviteUserSchema } from "@/libs/schemas";
 
 export default function UsersManagement() {
@@ -19,6 +19,7 @@ export default function UsersManagement() {
   // Row-level loading states
   const [updatingRoles, setUpdatingRoles] = useState(new Set());
   const [revokingUsers, setRevokingUsers] = useState(new Set());
+  const [updatingAlerts, setUpdatingAlerts] = useState(new Set());
 
   // Invite modal state
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -142,6 +143,27 @@ export default function UsersManagement() {
     }
   };
 
+  const handleToggleAlerts = async (userId, enabled) => {
+    setUpdatingAlerts(prev => new Set(prev).add(userId));
+
+    try {
+      const { success, errorMessage } = await updateEmailAlertPreference(userId, enabled);
+
+      if (!success) throw new Error(errorMessage);
+
+      toast.success(`Email alerts ${enabled ? 'enabled' : 'disabled'}`);
+      loadData();
+    } catch (error) {
+      toast.error(error.message || "Failed to update alert preference");
+    } finally {
+      setUpdatingAlerts(prev => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-[300px] sm:min-h-[400px]">
@@ -172,6 +194,14 @@ export default function UsersManagement() {
               <tr>
                 <th>User</th>
                 <th>Role</th>
+                <th className="hidden sm:table-cell">
+                  <span className="flex items-center gap-1">
+                    Alerts
+                    <div className="tooltip tooltip-bottom" data-tip="Receives a daily email containing relevant alerts (expired items, low-stock lots...)">
+                      <Info className="h-3.5 w-3.5 opacity-50 cursor-help" />
+                    </div>
+                  </span>
+                </th>
                 <th className="hidden md:table-cell">Joined</th>
                 <th className="text-right">Actions</th>
               </tr>
@@ -208,6 +238,20 @@ export default function UsersManagement() {
                       </select>
                       {updatingRoles.has(user.id) && (
                         <span className="loading loading-spinner loading-xs absolute right-6 sm:right-8 top-1/2 -translate-y-1/2"></span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="hidden sm:table-cell">
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        className={`toggle toggle-sm toggle-primary ${updatingAlerts.has(user.id) ? 'opacity-50' : ''}`}
+                        checked={user.receive_email_alerts || false}
+                        onChange={(e) => handleToggleAlerts(user.id, e.target.checked)}
+                        disabled={updatingAlerts.has(user.id)}
+                      />
+                      {updatingAlerts.has(user.id) && (
+                        <span className="loading loading-spinner loading-xs ml-2"></span>
                       )}
                     </div>
                   </td>

@@ -4,6 +4,7 @@ import { withAuth } from "@/libs/auth";
 import { getErrorMessage } from "@/libs/utils";
 import { reagentSchema, reagentUpdateSchema, stockInSchema, stockOutSchema, validateWithSchema } from "@/libs/schemas";
 import { logAuditEvent } from "@/libs/audit";
+import { fetchLowStockReagents, fetchExpiringLots } from "@/libs/queries";
 
 // ============ HELPER FUNCTIONS ============
 
@@ -655,16 +656,7 @@ export async function getReagentStockHistory(reagentId, { limit = 100 } = {}) {
  */
 export async function getLowStockReagents() {
   return withAuth(async (user, supabase) => {
-    const { data, error } = await supabase
-      .from("reagents")
-      .select("*")
-      .eq("is_active", true);
-
-    if (error) throw error;
-
-    // Filter where total_quantity <= minimum_stock
-    const lowStockItems = (data || []).filter(r => r.total_quantity <= r.minimum_stock);
-
+    const lowStockItems = await fetchLowStockReagents(supabase);
     return { success: true, data: lowStockItems };
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: [] }));
 }
@@ -676,10 +668,9 @@ export async function getLowStockReagents() {
  * @returns {Promise<{success: boolean, count: number, errorMessage?: string}>}
  */
 export async function getExpiredLotsCount() {
-  return withAuth(async (user, supabase) => {
+  return withAuth(async (_user, supabase) => {
     const today = new Date().toISOString().split('T')[0];
 
-    // Get expired lots and count unique reagent IDs
     const { data: expiredLots, error } = await supabase
       .from("lots")
       .select("reagent_id")
@@ -689,7 +680,6 @@ export async function getExpiredLotsCount() {
 
     if (error) throw error;
 
-    // Count unique reagents with expired lots
     const uniqueReagentIds = [...new Set(expiredLots?.map(l => l.reagent_id) || [])];
 
     return { success: true, count: uniqueReagentIds.length };
@@ -704,34 +694,8 @@ export async function getExpiredLotsCount() {
  */
 export async function getExpiredLots() {
   return withAuth(async (user, supabase) => {
-    const warningDate = new Date();
-    warningDate.setDate(warningDate.getDate() + 30);
-    const warningDateStr = warningDate.toISOString().split('T')[0];
-
-    const { data, error } = await supabase
-      .from("lots")
-      .select(`
-        id,
-        lot_number,
-        expiry_date,
-        quantity,
-        reagent_id,
-        reagents (
-          id,
-          name,
-          reference,
-          unit
-        )
-      `)
-      .eq("is_active", true)
-      .gt("quantity", 0)
-      .not("expiry_date", "is", null)
-      .lte("expiry_date", warningDateStr)
-      .order("expiry_date", { ascending: true });
-
-    if (error) throw error;
-
-    return { success: true, data: data || [] };
+    const data = await fetchExpiringLots(supabase);
+    return { success: true, data };
   }).catch(error => ({ success: false, errorMessage: getErrorMessage(error), data: [] }));
 }
 

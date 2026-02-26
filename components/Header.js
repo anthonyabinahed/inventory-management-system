@@ -60,8 +60,8 @@ const Header = ({ user, isAdmin }) => {
               </Link>
               {isAdmin && (
                 <Link
-                  href="/admin/dashboard"
-                  className={`btn btn-ghost btn-sm ${pathname.startsWith("/admin") ? "btn-active" : ""}`}
+                  href={config.routes.admin.dashboard}
+                  className={`btn btn-ghost btn-sm ${pathname.startsWith(config.routes.adminPrefix) ? "btn-active" : ""}`}
                   title="Admin Panel"
                 >
                   <Shield className="w-4 h-4" />
@@ -107,8 +107,8 @@ const Header = ({ user, isAdmin }) => {
             </Link>
             {isAdmin && (
               <Link
-                href="/admin/dashboard"
-                className={`btn btn-ghost btn-sm justify-start ${pathname.startsWith("/admin") ? "btn-active" : ""}`}
+                href={config.routes.admin.dashboard}
+                className={`btn btn-ghost btn-sm justify-start ${pathname.startsWith(config.routes.adminPrefix) ? "btn-active" : ""}`}
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <Shield className="w-4 h-4" />

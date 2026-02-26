@@ -4,8 +4,9 @@ import { cache } from "react";
 import { createSupabaseClient } from "@/libs/supabase/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { sendEmail } from "@/libs/resend";
+import { buildInviteHtml, buildInviteText } from "@/libs/email-templates";
 import { getErrorMessage } from "@/libs/utils";
-import { inviteUserSchema, updateUserRoleSchema, validateWithSchema } from "@/libs/schemas";
+import { inviteUserSchema, updateUserRoleSchema, updateEmailAlertSchema, validateWithSchema } from "@/libs/schemas";
 import config from "@/config";
 import { getCurrentUser } from "@/actions/auth";
 import { logAuditEvent } from "@/libs/audit";
@@ -97,6 +98,41 @@ export async function updateUserRole(userId, newRole) {
 
 
 /**
+ * Update a user's email alert preference (admin only)
+ */
+export async function updateEmailAlertPreference(userId, receiveEmailAlerts) {
+    const validated = validateWithSchema(updateEmailAlertSchema, { userId, receiveEmailAlerts });
+    if (!validated.success) return validated;
+
+    try {
+        const { isAdmin, user, error: authError } = await verifyAdmin();
+
+        if (!isAdmin) {
+            return { success: false, errorMessage: authError };
+        }
+
+        const supabase = await createSupabaseClient();
+        const { error } = await supabase
+            .from("profiles")
+            .update({ receive_email_alerts: receiveEmailAlerts })
+            .eq("id", userId);
+
+        if (error) throw error;
+
+        await logAuditEvent(supabase, user.id, {
+            action: 'update_email_alerts',
+            resourceType: 'user',
+            resourceId: userId,
+            description: `${receiveEmailAlerts ? 'Enabled' : 'Disabled'} email alerts for user`,
+        });
+
+        return { success: true };
+    } catch (error) {
+        return { success: false, errorMessage: getErrorMessage(error) };
+    }
+}
+
+/**
  * Invite a new user (admin only)
  */
 export async function inviteUser(email, fullName = "", role = "user") {
@@ -144,47 +180,8 @@ export async function inviteUser(email, fullName = "", role = "user") {
         await sendEmail({
             to: email,
             subject: `You've been invited to ${config.appName}`,
-            html: `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                </head>
-                <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="text-align: center; margin-bottom: 30px;">
-                        <h1 style="color: ${config.colors.main}; margin-bottom: 10px;">${config.appName}</h1>
-                    </div>
-
-                    <h2 style="color: #333;">You're Invited!</h2>
-
-                    <p>Hello${fullName ? ` ${fullName}` : ""},</p>
-
-                    <p>You've been invited to join the <strong>${config.appName}</strong> platform.</p>
-
-                    <p>Click the button below to set your password and get started:</p>
-
-                    <div style="text-align: center; margin: 30px 0;">
-                    <a href="${inviteUrl}"
-                           style="display: inline-block; padding: 14px 32px; background-color: ${config.colors.main}; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
-                            Accept Invitation
-                        </a>
-                    </div>
-
-                    <p style="color: #666; font-size: 14px;">
-                        This invitation link will expire in 24 hours.
-                    </p>
-
-                    <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;">
-
-                    <p style="color: #999; font-size: 12px; text-align: center;">
-                        If the button doesn't work, copy and paste this link into your browser:<br>
-                        <a href="${inviteUrl}" style="color: ${config.colors.main}; word-break: break-all;">${inviteUrl}</a>
-                    </p>
-                </body>
-                </html>
-                `,
-            text: `You've been invited to ${config.appName}!\n\nHello${fullName ? ` ${fullName}` : ""},\n\nClick this link to set your password and get started:\n${inviteUrl}\n\nThis invitation link will expire in 24 hours.`,
+            html: buildInviteHtml({ fullName, inviteUrl }),
+            text: buildInviteText({ fullName, inviteUrl }),
         });
 
         const supabase = await createSupabaseClient();

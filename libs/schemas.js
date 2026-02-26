@@ -142,3 +142,8 @@ export const updateUserRoleSchema = z.object({
     errorMap: () => ({ message: "Invalid role. Must be 'admin' or 'user'" }),
   }),
 });
+
+export const updateEmailAlertSchema = z.object({
+  userId: z.uuid("Invalid user ID"),
+  receiveEmailAlerts: z.boolean(),
+});

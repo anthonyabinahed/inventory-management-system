@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 
 function createRequest(path) {
-  const url = new URL(path, 'http://localhost:3000');
+  const url = new URL(path, 'http://localhost:3001');
   return {
     url: url.toString(),
     cookies: {
@@ -91,6 +91,11 @@ describe('unauthenticated user', () => {
 
   it('allows /accept-invite (not an auth route)', async () => {
     await updateSession(createRequest('/accept-invite'));
+    expect(mockRedirect).not.toHaveBeenCalled();
+  });
+
+  it('allows /api/alerts/send-digest (public API route with own auth)', async () => {
+    await updateSession(createRequest('/api/alerts/send-digest'));
     expect(mockRedirect).not.toHaveBeenCalled();
   });
 });

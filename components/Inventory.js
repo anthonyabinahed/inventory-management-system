@@ -14,6 +14,7 @@ import ReagentModal from "./inventory/ReagentModal";
 import StockHistoryModal from "./inventory/StockHistoryModal";
 import Pagination from "./inventory/Pagination";
 import ExportModal from "./inventory/ExportModal";
+import config from "@/config";
 
 const DEFAULT_FILTERS = {
   search: '',
@@ -66,7 +67,7 @@ export function Inventory({ initialFilters = {} }) {
       }
 
       try {
-        const res = await fetch(`/api/export/status/${activeExportJobId}`);
+        const res = await fetch(`${config.routes.api.export.status}/${activeExportJobId}`);
         const body = await res.json();
 
         if (body.status === "completed") {

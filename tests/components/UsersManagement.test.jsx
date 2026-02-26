@@ -17,10 +17,12 @@ vi.mock('@/actions/users', () => ({
 const mockInviteUser = vi.fn();
 const mockRevokeUser = vi.fn();
 const mockUpdateUserRole = vi.fn();
+const mockUpdateEmailAlertPreference = vi.fn();
 vi.mock('@/actions/admin', () => ({
   inviteUser: (...args) => mockInviteUser(...args),
   revokeUser: (...args) => mockRevokeUser(...args),
   updateUserRole: (...args) => mockUpdateUserRole(...args),
+  updateEmailAlertPreference: (...args) => mockUpdateEmailAlertPreference(...args),
 }));
 
 const mockToastError = vi.fn();
@@ -45,6 +47,7 @@ const MOCK_USERS = [
     full_name: 'Admin User',
     role: 'admin',
     created_at: '2024-01-01T00:00:00Z',
+    receive_email_alerts: true,
   },
   {
     id: 'user-002',
@@ -52,6 +55,7 @@ const MOCK_USERS = [
     full_name: 'John Doe',
     role: 'user',
     created_at: '2024-02-01T00:00:00Z',
+    receive_email_alerts: false,
   },
   {
     id: 'user-003',
@@ -59,6 +63,7 @@ const MOCK_USERS = [
     full_name: 'Jane Smith',
     role: 'user',
     created_at: '2024-03-01T00:00:00Z',
+    receive_email_alerts: true,
   },
 ];
 
@@ -312,6 +317,94 @@ describe('UsersManagement', () => {
 
     await waitFor(() => {
       expect(screen.queryByText('Invite New User')).not.toBeInTheDocument();
+    });
+  });
+
+  // --- Email Alerts Toggle ---
+
+  it('renders alerts toggle for each user row', async () => {
+    setupDefaults();
+    render(<UsersManagement />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Admin User')).toBeInTheDocument();
+    });
+
+    const toggles = screen.getAllByRole('checkbox');
+    expect(toggles.length).toBe(3); // One per user
+  });
+
+  it('toggle is checked when receive_email_alerts is true', async () => {
+    setupDefaults();
+    render(<UsersManagement />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Admin User')).toBeInTheDocument();
+    });
+
+    const adminRow = screen.getByText('Admin User').closest('tr');
+    const adminToggle = within(adminRow).getByRole('checkbox');
+    expect(adminToggle).toBeChecked();
+
+    const janeRow = screen.getByText('Jane Smith').closest('tr');
+    const janeToggle = within(janeRow).getByRole('checkbox');
+    expect(janeToggle).toBeChecked();
+  });
+
+  it('toggle is unchecked when receive_email_alerts is false', async () => {
+    setupDefaults();
+    render(<UsersManagement />);
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    const johnRow = screen.getByText('John Doe').closest('tr');
+    const johnToggle = within(johnRow).getByRole('checkbox');
+    expect(johnToggle).not.toBeChecked();
+  });
+
+  it('calls updateEmailAlertPreference on toggle change', async () => {
+    setupDefaults();
+    mockUpdateEmailAlertPreference.mockResolvedValue({ success: true });
+    const user = userEvent.setup();
+
+    render(<UsersManagement />);
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    const johnRow = screen.getByText('John Doe').closest('tr');
+    const johnToggle = within(johnRow).getByRole('checkbox');
+    await user.click(johnToggle);
+
+    await waitFor(() => {
+      expect(mockUpdateEmailAlertPreference).toHaveBeenCalledWith('user-002', true);
+      expect(mockToastSuccess).toHaveBeenCalledWith('Email alerts enabled');
+    });
+  });
+
+  it('shows error toast on failed alert toggle', async () => {
+    setupDefaults();
+    mockUpdateEmailAlertPreference.mockResolvedValue({
+      success: false,
+      errorMessage: 'Permission denied',
+    });
+    const user = userEvent.setup();
+
+    render(<UsersManagement />);
+
+    await waitFor(() => {
+      expect(screen.getByText('John Doe')).toBeInTheDocument();
+    });
+
+    const johnRow = screen.getByText('John Doe').closest('tr');
+    const johnToggle = within(johnRow).getByRole('checkbox');
+    await user.click(johnToggle);
+
+    await waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith('Permission denied');
     });
   });
 });

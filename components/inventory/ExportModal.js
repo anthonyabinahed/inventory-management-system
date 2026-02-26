@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { FileSpreadsheet, X, Download } from "lucide-react";
 import toast from "react-hot-toast";
+import config from "@/config";
 
 export default function ExportModal({ onClose, onExportStarted }) {
   const [includeEmptyLots, setIncludeEmptyLots] = useState(true);
@@ -12,7 +13,7 @@ export default function ExportModal({ onClose, onExportStarted }) {
   const handleExport = async () => {
     setIsSubmitting(true);
     try {
-      const res = await fetch("/api/export/request", {
+      const res = await fetch(config.routes.api.export.request, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
