@@ -38,10 +38,12 @@ export async function deleteUserByEmail(email) {
 
   if (profile) {
     // Clean up any data referencing this user's profile before deletion
+    await admin.from('export_jobs').delete().eq('user_id', profile.id);
     await admin.from('audit_logs').delete().eq('user_id', profile.id);
     await admin.from('stock_movements').delete().eq('performed_by', profile.id);
     await admin.from('lots').delete().eq('created_by', profile.id);
     await admin.from('reagents').delete().eq('created_by', profile.id);
+    await admin.auth.admin.updateUserById(profile.id, { ban_duration: 'none' }).catch(() => {});
     await admin.auth.admin.deleteUser(profile.id);
     await new Promise((r) => setTimeout(r, 100));
   }
@@ -178,6 +180,11 @@ export async function cleanupAll() {
     .filter(p => p.email?.endsWith('@test.com') || p.email?.endsWith('@example.com'))
     .map(p => p.id);
 
+  // Delete test export jobs (FK to profiles)
+  if (testUserIds.length > 0) {
+    await admin.from('export_jobs').delete().in('user_id', testUserIds);
+  }
+
   // Delete test audit logs (FK to profiles)
   if (testUserIds.length > 0) {
     await admin.from('audit_logs').delete().in('user_id', testUserIds);
@@ -200,9 +207,10 @@ export async function cleanupAll() {
   }
   await admin.from('reagents').delete().is('created_by', null);
 
-  // Delete test auth users
+  // Delete test auth users (unban first in case they were deactivated)
   for (const profile of (testProfiles || [])) {
     if (profile.email?.endsWith('@test.com') || profile.email?.endsWith('@example.com')) {
+      await admin.auth.admin.updateUserById(profile.id, { ban_duration: 'none' }).catch(() => {});
       await admin.auth.admin.deleteUser(profile.id);
     }
   }

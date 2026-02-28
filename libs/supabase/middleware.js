@@ -75,6 +75,20 @@ export async function updateSession(request) {
     return createRedirect(config.routes.login)
   }
 
+  // Deactivated user on protected route → sign out and redirect to login
+  if (isProtected && user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_active')
+      .eq('id', user.sub)
+      .single()
+
+    if (profile && !profile.is_active) {
+      await supabase.auth.signOut()
+      return createRedirect(config.routes.login)
+    }
+  }
+
   // Authenticated user trying to access auth route → redirect to home
   if (isAuthRoute && user) {
     return createRedirect(config.routes.home)

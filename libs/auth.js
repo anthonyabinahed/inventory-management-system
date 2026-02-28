@@ -26,7 +26,20 @@ export async function withAuth(actionFn) {
   if (!user) {
     return { success: false, errorMessage: "Unauthorized" };
   }
-  
+
   const supabase = await createSupabaseClient();
+
+  // Defense-in-depth: check if user profile is active
+  // (banned users can't authenticate, but covers lingering sessions)
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("is_active")
+    .eq("id", user.id)
+    .single();
+
+  if (!profile?.is_active) {
+    return { success: false, errorMessage: "Account deactivated" };
+  }
+
   return actionFn(user, supabase);
 }

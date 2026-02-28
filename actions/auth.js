@@ -39,12 +39,18 @@ export async function login(formData) {
 
         if (error) throw error;
 
-        // Check if user is admin
+        // Check profile status and role
         const { data: profile } = await supabase
             .from("profiles")
-            .select("role")
+            .select("role, is_active")
             .eq("id", data.user.id)
             .single();
+
+        // Check if account is deactivated
+        if (!profile?.is_active) {
+            await supabase.auth.signOut();
+            return { errorMessage: "Your account has been deactivated. Contact an administrator." };
+        }
 
         return { success: true, isAdmin: profile?.role === "admin" };
     } catch (error) {

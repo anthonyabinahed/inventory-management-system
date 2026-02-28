@@ -32,7 +32,7 @@ libs/             Shared utilities
   resend.js       Resend email client (sendEmail)
   queries.js      Shared DB query helpers (no "use server" — safe to import from API routes)
 supabase/
-  migrations/     SQL migrations (run in order, 00001–00008)
+  migrations/     SQL migrations (run in order, 00001–00012)
   functions/      Edge Functions (Deno 2 runtime)
     process-export/   Background Excel generation
     _shared/          Edge Function internal library (supabase.ts, excel.ts)
@@ -48,13 +48,15 @@ tests/            Vitest suites: unit, integration, actions, components
   - FE: `schema.safeParse(data)` before submit, toast first error
   - BE: `validateWithSchema(schema, data)` at top of server actions
 - **Routes**: All route paths must come from `config.routes` in `config.js` — never hardcode path strings in components, middleware, or server code
-- **Server actions** use `withAuth()` from `libs/auth.js`
+- **Server actions** use `withAuth()` from `libs/auth.js` — also checks `profiles.is_active`
 - **API routes** use `createSupabaseClient()` directly (no `withAuth`)
 - **Error handling** via `getErrorMessage()` from `libs/utils.js`
 - **Optional strings → null**: Zod `.transform(v => v || null)` for nullable DB columns
 - **Categories**: `reagent`, `control`, `calibrator`, `consumable`, `solution`
 - `lots.expiry_date` is nullable — consumables don't expire; sort null last
 - `internal_barcode` was renamed to `reference` in migration 00005
+- **User deactivation (soft-delete)**: Users are never hard-deleted. `revokeUser()` bans the auth user + calls `deactivate_user_tx` RPC (atomic transaction for profile update, export job cancellation, audit log). `reactivateUser()` reverses it via `reactivate_user_tx` RPC. If the DB transaction fails after the Auth ban/unban, a compensating rollback restores the Auth state. The `is_active` check is enforced at 4 layers: Supabase Auth ban, middleware, `withAuth()`, and RLS policies.
+- **Multi-step operations with Auth + DB**: When an operation involves both a GoTrue API call (ban/unban) and multiple DB writes, use the pattern: (1) Auth call first, (2) atomic RPC for all DB operations, (3) compensating Auth rollback if the RPC fails. See `revokeUser`/`reactivateUser` in `actions/admin.js` and RPC functions in migration 00012.
 
 ## Environments
 
@@ -139,7 +141,7 @@ Signed URLs expire after 1 hour.
 
 ## Email Alert Architecture
 
-Daily digest emails sent to users with `profiles.receive_email_alerts = true`.
+Daily digest emails sent to users with `profiles.receive_email_alerts = true` AND `profiles.is_active = true`.
 
 ```
 Vercel Cron (07:00 UTC daily, vercel.json)
@@ -170,3 +172,8 @@ curl -X GET http://localhost:3001/api/alerts/send-digest \
 - **`requestPasswordReset`**: returns `success: true` even on errors (security — don't reveal whether email exists)
 - **RLS silent failures**: Supabase returns success (no error) for policy-denied UPDATE/DELETE — verify data unchanged rather than checking error
 - **Edge Function cannot import from Next.js**: logic shared between the two runtimes must be duplicated in `_shared/`
+- **Never hard-delete users**: Use `revokeUser()` (soft-delete) — hard-deleting a user with activity history will fail with FK constraint violations on `audit_logs`, `stock_movements`, and `export_jobs`
+
+## Post-Task Checklist
+
+- **Always update `CLAUDE.md`** after completing a task that changes architecture, conventions, DB schema, or key behaviors

@@ -48,9 +48,13 @@ export const verifyAdmin = cache(async () => {
     const supabase = await createSupabaseClient();
     const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, is_active")
         .eq("id", user.id)
         .single();
+
+    if (!profile?.is_active) {
+        return { isAdmin: false, user, error: "Account deactivated" };
+    }
 
     if (profile?.role !== "admin") {
         return { isAdmin: false, user, error: "Forbidden: Admin access required" };
@@ -200,7 +204,15 @@ export async function inviteUser(email, fullName = "", role = "user") {
 }
 
 /**
- * Revoke a user's access (admin only)
+ * Deactivate a user's access (admin only)
+ * Soft-deletes by banning in Auth and marking profile inactive.
+ * Preserves audit trail and stock movement history.
+ *
+ * Uses a hybrid transaction strategy:
+ * - Auth ban (GoTrue API) runs first (non-transactional)
+ * - DB operations (profile update, export cancellation, audit log) run
+ *   in a single atomic RPC transaction
+ * - If the DB transaction fails, the Auth ban is rolled back (compensating action)
  */
 export async function revokeUser(userId) {
     try {
@@ -211,21 +223,75 @@ export async function revokeUser(userId) {
         }
 
         const supabaseAdmin = await getSupabaseAdmin();
-        const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
-        if (error) throw error;
-
-        const supabase = await createSupabaseClient();
-        await logAuditEvent(supabase, user.id, {
-            action: 'revoke_user',
-            resourceType: 'user',
-            resourceId: userId,
-            description: `Revoked user "${userId}"`,
+        // 1. Ban the user in Supabase Auth (~100 years = effectively permanent)
+        const { error: banError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+            ban_duration: '876000h',
         });
+        if (banError) throw banError;
+
+        // 2. Atomic DB transaction: profile update + export cancellation + audit log
+        const { error: rpcError } = await supabaseAdmin.rpc('deactivate_user_tx', {
+            target_user_id: userId,
+            admin_user_id: user.id,
+        });
+
+        if (rpcError) {
+            // Compensating action: unban to restore consistent state
+            await supabaseAdmin.auth.admin.updateUserById(userId, {
+                ban_duration: 'none',
+            });
+            throw rpcError;
+        }
 
         return { success: true, errorMessage: null };
     } catch (error) {
-        console.error("Revoke user error:", error);
+        console.error("Deactivate user error:", error);
+        return { success: false, errorMessage: getErrorMessage(error) };
+    }
+}
+
+/**
+ * Reactivate a deactivated user (admin only)
+ * Unbans in Auth and marks profile active.
+ *
+ * Uses the same hybrid transaction strategy as revokeUser():
+ * - Auth unban first, then atomic DB transaction
+ * - If DB fails, re-ban to restore consistent state
+ */
+export async function reactivateUser(userId) {
+    try {
+        const { isAdmin, user, error: authError } = await verifyAdmin();
+
+        if (!isAdmin) {
+            return { success: false, errorMessage: authError };
+        }
+
+        const supabaseAdmin = await getSupabaseAdmin();
+
+        // 1. Unban the user in Supabase Auth
+        const { error: unbanError } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+            ban_duration: 'none',
+        });
+        if (unbanError) throw unbanError;
+
+        // 2. Atomic DB transaction: profile update + audit log
+        const { error: rpcError } = await supabaseAdmin.rpc('reactivate_user_tx', {
+            target_user_id: userId,
+            admin_user_id: user.id,
+        });
+
+        if (rpcError) {
+            // Compensating action: re-ban to restore consistent state
+            await supabaseAdmin.auth.admin.updateUserById(userId, {
+                ban_duration: '876000h',
+            });
+            throw rpcError;
+        }
+
+        return { success: true, errorMessage: null };
+    } catch (error) {
+        console.error("Reactivate user error:", error);
         return { success: false, errorMessage: getErrorMessage(error) };
     }
 }

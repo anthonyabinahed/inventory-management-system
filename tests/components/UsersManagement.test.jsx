@@ -16,11 +16,13 @@ vi.mock('@/actions/users', () => ({
 
 const mockInviteUser = vi.fn();
 const mockRevokeUser = vi.fn();
+const mockReactivateUser = vi.fn();
 const mockUpdateUserRole = vi.fn();
 const mockUpdateEmailAlertPreference = vi.fn();
 vi.mock('@/actions/admin', () => ({
   inviteUser: (...args) => mockInviteUser(...args),
   revokeUser: (...args) => mockRevokeUser(...args),
+  reactivateUser: (...args) => mockReactivateUser(...args),
   updateUserRole: (...args) => mockUpdateUserRole(...args),
   updateEmailAlertPreference: (...args) => mockUpdateEmailAlertPreference(...args),
 }));
@@ -48,6 +50,7 @@ const MOCK_USERS = [
     role: 'admin',
     created_at: '2024-01-01T00:00:00Z',
     receive_email_alerts: true,
+    is_active: true,
   },
   {
     id: 'user-002',
@@ -56,6 +59,7 @@ const MOCK_USERS = [
     role: 'user',
     created_at: '2024-02-01T00:00:00Z',
     receive_email_alerts: false,
+    is_active: true,
   },
   {
     id: 'user-003',
@@ -64,6 +68,16 @@ const MOCK_USERS = [
     role: 'user',
     created_at: '2024-03-01T00:00:00Z',
     receive_email_alerts: true,
+    is_active: true,
+  },
+  {
+    id: 'user-004',
+    email: 'deactivated@example.com',
+    full_name: 'Deactivated User',
+    role: 'user',
+    created_at: '2024-04-01T00:00:00Z',
+    receive_email_alerts: false,
+    is_active: false,
   },
 ];
 
@@ -91,6 +105,7 @@ describe('UsersManagement', () => {
       expect(screen.getByText('Admin User')).toBeInTheDocument();
       expect(screen.getByText('John Doe')).toBeInTheDocument();
       expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+      expect(screen.getByText('Deactivated User')).toBeInTheDocument();
     });
   });
 
@@ -113,7 +128,7 @@ describe('UsersManagement', () => {
 
   // --- Self-protection ---
 
-  it('shows "You" badge for current user instead of revoke button', async () => {
+  it('shows "You" badge for current user instead of deactivate button', async () => {
     setupDefaults();
     render(<UsersManagement />);
 
@@ -124,9 +139,9 @@ describe('UsersManagement', () => {
     // Current user's row should have "You" badge
     expect(screen.getByText('You')).toBeInTheDocument();
 
-    // Other users should have revoke buttons
-    const revokeButtons = screen.getAllByText(/revoke/i);
-    expect(revokeButtons.length).toBe(4); // 2 users × 2 buttons (desktop + mobile)
+    // Active non-current users should have deactivate buttons (John + Jane)
+    const deactivateButtons = screen.getAllByText('Deactivate');
+    expect(deactivateButtons.length).toBe(4); // 2 users × 2 (desktop + mobile)
   });
 
   it('disables role dropdown for current user', async () => {
@@ -137,14 +152,12 @@ describe('UsersManagement', () => {
       expect(screen.getByText('Admin User')).toBeInTheDocument();
     });
 
-    // Find all role selects
-    const selects = screen.getAllByRole('combobox');
     // Admin user's select should be disabled
     const adminRow = screen.getByText('Admin User').closest('tr');
     const adminSelect = within(adminRow).getByRole('combobox');
     expect(adminSelect).toBeDisabled();
 
-    // Other users' selects should be enabled
+    // Other active users' selects should be enabled
     const johnRow = screen.getByText('John Doe').closest('tr');
     const johnSelect = within(johnRow).getByRole('combobox');
     expect(johnSelect).not.toBeDisabled();
@@ -174,7 +187,7 @@ describe('UsersManagement', () => {
     });
   });
 
-  // --- Revoke ---
+  // --- Deactivate ---
 
   it('calls revokeUser after confirm dialog', async () => {
     setupDefaults();
@@ -188,9 +201,8 @@ describe('UsersManagement', () => {
     });
 
     const johnRow = screen.getByText('John Doe').closest('tr');
-    // Get the revoke button (desktop version has "Revoke Access")
-    const revokeBtn = within(johnRow).getAllByRole('button')[0];
-    await user.click(revokeBtn);
+    const deactivateBtn = within(johnRow).getAllByRole('button')[0];
+    await user.click(deactivateBtn);
 
     expect(window.confirm).toHaveBeenCalled();
     await waitFor(() => {
@@ -211,11 +223,97 @@ describe('UsersManagement', () => {
     });
 
     const johnRow = screen.getByText('John Doe').closest('tr');
-    const revokeBtn = within(johnRow).getAllByRole('button')[0];
-    await user.click(revokeBtn);
+    const deactivateBtn = within(johnRow).getAllByRole('button')[0];
+    await user.click(deactivateBtn);
 
     expect(window.confirm).toHaveBeenCalled();
     expect(mockRevokeUser).not.toHaveBeenCalled();
+  });
+
+  // --- Deactivated user display ---
+
+  it('shows Deactivated badge for inactive users', async () => {
+    setupDefaults();
+    render(<UsersManagement />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Deactivated User')).toBeInTheDocument();
+    });
+
+    const deactivatedRow = screen.getByText('Deactivated User').closest('tr');
+    expect(within(deactivatedRow).getByText('Deactivated')).toBeInTheDocument();
+  });
+
+  it('shows dimmed styling for deactivated users', async () => {
+    setupDefaults();
+    render(<UsersManagement />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Deactivated User')).toBeInTheDocument();
+    });
+
+    const deactivatedRow = screen.getByText('Deactivated User').closest('tr');
+    const nameDiv = within(deactivatedRow).getByText('Deactivated User').closest('.font-bold');
+    expect(nameDiv.className).toContain('opacity-50');
+  });
+
+  it('shows Reactivate button for deactivated users', async () => {
+    setupDefaults();
+    render(<UsersManagement />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Deactivated User')).toBeInTheDocument();
+    });
+
+    const deactivatedRow = screen.getByText('Deactivated User').closest('tr');
+    expect(within(deactivatedRow).getByText('Reactivate')).toBeInTheDocument();
+  });
+
+  it('calls reactivateUser when clicking Reactivate', async () => {
+    setupDefaults();
+    mockReactivateUser.mockResolvedValue({ success: true, errorMessage: null });
+    const user = userEvent.setup();
+
+    render(<UsersManagement />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Deactivated User')).toBeInTheDocument();
+    });
+
+    const deactivatedRow = screen.getByText('Deactivated User').closest('tr');
+    const reactivateBtn = within(deactivatedRow).getByText('Reactivate');
+    await user.click(reactivateBtn);
+
+    await waitFor(() => {
+      expect(mockReactivateUser).toHaveBeenCalledWith('user-004');
+      expect(mockToastSuccess).toHaveBeenCalled();
+    });
+  });
+
+  it('disables role dropdown for deactivated users', async () => {
+    setupDefaults();
+    render(<UsersManagement />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Deactivated User')).toBeInTheDocument();
+    });
+
+    const deactivatedRow = screen.getByText('Deactivated User').closest('tr');
+    const roleSelect = within(deactivatedRow).getByRole('combobox');
+    expect(roleSelect).toBeDisabled();
+  });
+
+  it('disables email alerts toggle for deactivated users', async () => {
+    setupDefaults();
+    render(<UsersManagement />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Deactivated User')).toBeInTheDocument();
+    });
+
+    const deactivatedRow = screen.getByText('Deactivated User').closest('tr');
+    const alertToggle = within(deactivatedRow).getByRole('checkbox');
+    expect(alertToggle).toBeDisabled();
   });
 
   // --- Invite Modal ---
@@ -331,7 +429,7 @@ describe('UsersManagement', () => {
     });
 
     const toggles = screen.getAllByRole('checkbox');
-    expect(toggles.length).toBe(3); // One per user
+    expect(toggles.length).toBe(4); // One per user
   });
 
   it('toggle is checked when receive_email_alerts is true', async () => {

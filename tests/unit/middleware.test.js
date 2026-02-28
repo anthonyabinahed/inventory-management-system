@@ -21,13 +21,24 @@ vi.mock('next/server', () => ({
 
 // Mock Supabase SSR
 let mockClaims = null;
+let mockProfileIsActive = true;
 vi.mock('@supabase/ssr', () => ({
   createServerClient: vi.fn(() => ({
     auth: {
       getClaims: vi.fn().mockImplementation(() =>
         Promise.resolve({ data: { claims: mockClaims } })
       ),
+      signOut: vi.fn().mockResolvedValue({}),
     },
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          single: vi.fn().mockImplementation(() =>
+            Promise.resolve({ data: { is_active: mockProfileIsActive } })
+          ),
+        })),
+      })),
+    })),
   })),
 }));
 
@@ -36,6 +47,7 @@ const { updateSession } = await import('@/libs/supabase/middleware');
 beforeEach(() => {
   vi.clearAllMocks();
   mockClaims = null;
+  mockProfileIsActive = true;
 });
 
 function createRequest(path) {
@@ -134,6 +146,18 @@ describe('authenticated user', () => {
 
   it('allows /accept-invite (needed for the flow)', async () => {
     await updateSession(createRequest('/accept-invite'));
+    expect(mockRedirect).not.toHaveBeenCalled();
+  });
+
+  it('redirects deactivated user on protected route to /login', async () => {
+    mockProfileIsActive = false;
+    await updateSession(createRequest('/'));
+    expect(mockRedirect).toHaveBeenCalledWith('/login');
+  });
+
+  it('allows deactivated user on non-protected route', async () => {
+    mockProfileIsActive = false;
+    await updateSession(createRequest('/reset-password'));
     expect(mockRedirect).not.toHaveBeenCalled();
   });
 });

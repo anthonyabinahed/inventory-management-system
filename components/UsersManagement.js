@@ -8,7 +8,7 @@ import toast from "react-hot-toast";
 import { Plus, Send, X, Info } from "lucide-react";
 import { getCurrentUser } from "@/actions/auth";
 import { getAllUsers } from "@/actions/users";
-import { inviteUser, revokeUser, updateUserRole, updateEmailAlertPreference } from "@/actions/admin";
+import { inviteUser, revokeUser, reactivateUser, updateUserRole, updateEmailAlertPreference } from "@/actions/admin";
 import { inviteUserSchema } from "@/libs/schemas";
 
 export default function UsersManagement() {
@@ -19,6 +19,7 @@ export default function UsersManagement() {
   // Row-level loading states
   const [updatingRoles, setUpdatingRoles] = useState(new Set());
   const [revokingUsers, setRevokingUsers] = useState(new Set());
+  const [reactivatingUsers, setReactivatingUsers] = useState(new Set());
   const [updatingAlerts, setUpdatingAlerts] = useState(new Set());
 
   // Invite modal state
@@ -97,13 +98,12 @@ export default function UsersManagement() {
   const handleRevokeAccess = async (userId, email) => {
     if (
       !confirm(
-        `Are you sure you want to revoke access for ${email}?\n\nThis action cannot be undone.`
+        `Are you sure you want to deactivate ${email}?\n\nThey will be unable to sign in until reactivated.`
       )
     ) {
       return;
     }
 
-    // Add to revoking set for loading state
     setRevokingUsers(prev => new Set(prev).add(userId));
 
     try {
@@ -111,12 +111,33 @@ export default function UsersManagement() {
 
       if (!success) throw new Error(errorMessage);
 
-      toast.success(`Access revoked for ${email}`);
+      toast.success(`${email} has been deactivated`);
       loadData();
     } catch (error) {
-      toast.error(error.message || "Failed to revoke access");
+      toast.error(error.message || "Failed to deactivate user");
     } finally {
       setRevokingUsers(prev => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
+    }
+  };
+
+  const handleReactivateUser = async (userId, email) => {
+    setReactivatingUsers(prev => new Set(prev).add(userId));
+
+    try {
+      const { success, errorMessage } = await reactivateUser(userId);
+
+      if (!success) throw new Error(errorMessage);
+
+      toast.success(`${email} has been reactivated`);
+      loadData();
+    } catch (error) {
+      toast.error(error.message || "Failed to reactivate user");
+    } finally {
+      setReactivatingUsers(prev => {
         const next = new Set(prev);
         next.delete(userId);
         return next;
@@ -212,8 +233,11 @@ export default function UsersManagement() {
                   <td>
                     <div className="flex items-center gap-2 sm:gap-3">
                       <div className="min-w-0">
-                        <div className="font-bold text-sm sm:text-base truncate">
+                        <div className={`font-bold text-sm sm:text-base truncate ${user.is_active === false ? 'opacity-50' : ''}`}>
                           {user.full_name || "—"}
+                          {user.is_active === false && (
+                            <span className="badge badge-error badge-xs ml-2">Deactivated</span>
+                          )}
                         </div>
                         <div className="text-xs sm:text-sm opacity-50 truncate max-w-[100px] sm:max-w-[200px] md:max-w-none">
                           {user.email}
@@ -231,7 +255,7 @@ export default function UsersManagement() {
                         onChange={(e) =>
                           handleUpdateRole(user.id, e.target.value)
                         }
-                        disabled={user.id === currentUserId || updatingRoles.has(user.id)}
+                        disabled={user.id === currentUserId || updatingRoles.has(user.id) || user.is_active === false}
                       >
                         <option value="user">User</option>
                         <option value="admin">Admin</option>
@@ -248,7 +272,7 @@ export default function UsersManagement() {
                         className={`toggle toggle-sm toggle-primary ${updatingAlerts.has(user.id) ? 'opacity-50' : ''}`}
                         checked={user.receive_email_alerts || false}
                         onChange={(e) => handleToggleAlerts(user.id, e.target.checked)}
-                        disabled={updatingAlerts.has(user.id)}
+                        disabled={updatingAlerts.has(user.id) || user.is_active === false}
                       />
                       {updatingAlerts.has(user.id) && (
                         <span className="loading loading-spinner loading-xs ml-2"></span>
@@ -261,6 +285,19 @@ export default function UsersManagement() {
                   <td className="text-right">
                     {user.id === currentUserId ? (
                       <span className="badge badge-ghost badge-sm sm:badge-md">You</span>
+                    ) : user.is_active === false ? (
+                      <button
+                        className="btn btn-ghost btn-xs sm:btn-sm text-success"
+                        onClick={() =>
+                          handleReactivateUser(user.id, user.email)
+                        }
+                        disabled={reactivatingUsers.has(user.id)}
+                      >
+                        {reactivatingUsers.has(user.id) && (
+                          <span className="loading loading-spinner loading-xs"></span>
+                        )}
+                        Reactivate
+                      </button>
                     ) : (
                       <button
                         className="btn btn-ghost btn-xs sm:btn-sm text-error"
@@ -272,8 +309,8 @@ export default function UsersManagement() {
                         {revokingUsers.has(user.id) && (
                           <span className="loading loading-spinner loading-xs"></span>
                         )}
-                        <span className="hidden sm:inline">Revoke Access</span>
-                        <span className="sm:hidden">Revoke</span>
+                        <span className="hidden sm:inline">Deactivate</span>
+                        <span className="sm:hidden">Deactivate</span>
                       </button>
                     )}
                   </td>

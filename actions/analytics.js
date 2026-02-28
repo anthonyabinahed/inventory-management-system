@@ -353,7 +353,7 @@ export async function getAuditLogs(params = {}) {
   return withAuth(async (user, supabase) => {
     let query = supabase
       .from("audit_logs")
-      .select("*, profiles:user_id(full_name, email)", { count: 'exact' })
+      .select("*, profiles:user_id(full_name, email, is_active)", { count: 'exact' })
       .order("performed_at", { ascending: false });
 
     if (resourceType) {

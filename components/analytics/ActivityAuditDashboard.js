@@ -18,6 +18,9 @@ const ACTION_LABELS = {
   invite_user: "Invite",
   update_user_role: "Role Change",
   revoke_user: "Revoke",
+  deactivate_user: "Deactivate",
+  reactivate_user: "Reactivate",
+  update_email_alerts: "Alerts",
 };
 
 const DATE_RANGE_OPTIONS = [
@@ -169,6 +172,7 @@ export default function ActivityAuditDashboard() {
                     </td>
                     <td className="text-xs truncate max-w-[100px]" title={log.profiles?.full_name || log.profiles?.email}>
                       {log.profiles?.full_name || log.profiles?.email || "\u2014"}
+                      {log.profiles && !log.profiles.is_active && <span className="opacity-50"> (deactivated)</span>}
                     </td>
                     <td>
                       <span className={`badge badge-xs ${getAuditActionBadgeClass(log.action)}`}>

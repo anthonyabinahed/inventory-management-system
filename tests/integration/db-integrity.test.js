@@ -210,6 +210,98 @@ describe('foreign key behavior', () => {
       .maybeSingle();
     expect(data).toBeNull();
   });
+
+  it('soft-deleted user profile preserves audit_logs', async () => {
+    const { user: tempUser } = await createTestUser({
+      email: 'soft-audit@test.com',
+      role: 'user',
+    });
+
+    // Insert an audit log for this user
+    const { data: log } = await admin
+      .from('audit_logs')
+      .insert({
+        action: 'stock_in',
+        resource_type: 'lot',
+        resource_id: 'test-lot-id',
+        description: 'Test action by user',
+        user_id: tempUser.id,
+      })
+      .select()
+      .single();
+
+    // Soft-delete: set is_active = false
+    await admin.from('profiles').update({ is_active: false }).eq('id', tempUser.id);
+
+    // Audit log should still exist with user_id intact
+    const { data: savedLog } = await admin
+      .from('audit_logs')
+      .select('user_id')
+      .eq('id', log.id)
+      .single();
+    expect(savedLog.user_id).toBe(tempUser.id);
+  });
+
+  it('soft-deleted user profile preserves stock_movements', async () => {
+    const { user: tempUser } = await createTestUser({
+      email: 'soft-movement@test.com',
+      role: 'user',
+    });
+
+    const reagent = await createTestReagent();
+    const lot = await createTestLot(reagent.id);
+
+    const { data: movement } = await admin
+      .from('stock_movements')
+      .insert({
+        lot_id: lot.id,
+        movement_type: 'in',
+        quantity: 5,
+        quantity_before: 0,
+        quantity_after: 5,
+        performed_by: tempUser.id,
+      })
+      .select()
+      .single();
+
+    // Soft-delete
+    await admin.from('profiles').update({ is_active: false }).eq('id', tempUser.id);
+
+    // Movement should still exist with performed_by intact
+    const { data: savedMovement } = await admin
+      .from('stock_movements')
+      .select('performed_by')
+      .eq('id', movement.id)
+      .single();
+    expect(savedMovement.performed_by).toBe(tempUser.id);
+  });
+
+  it('soft-deleted user profile preserves export_jobs', async () => {
+    const { user: tempUser } = await createTestUser({
+      email: 'soft-export@test.com',
+      role: 'user',
+    });
+
+    const { data: job } = await admin
+      .from('export_jobs')
+      .insert({
+        user_id: tempUser.id,
+        status: 'completed',
+      })
+      .select()
+      .single();
+
+    // Soft-delete
+    await admin.from('profiles').update({ is_active: false }).eq('id', tempUser.id);
+
+    // Export job should still exist
+    const { data: savedJob } = await admin
+      .from('export_jobs')
+      .select('user_id')
+      .eq('id', job.id)
+      .single();
+    expect(savedJob.user_id).toBe(tempUser.id);
+  });
 });
 
 // ============ Triggers ============

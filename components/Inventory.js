@@ -50,7 +50,7 @@ export function Inventory({ initialFilters = {} }) {
 
     const TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
     const startedAt = Date.now();
-    const toastId = toast.loading("Preparing your export…");
+    const toastId = toast.loading("Preparing your export…", { duration: Infinity });
     let stopped = false;
 
     const stop = (fn) => {

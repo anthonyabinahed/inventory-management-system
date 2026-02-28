@@ -197,9 +197,6 @@ export function BarcodeManager() {
         )}
       </div>
 
-      {/* Divider */}
-      <div className="divider my-2">Labels Batch</div>
-
       {/* Label batch */}
       <LabelBatchPrintView
         labels={labelBatch}

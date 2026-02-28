@@ -140,6 +140,7 @@ export default function StockHistoryModal({ isOpen, onClose, reagent }) {
                               </td>
                               <td className="hidden md:table-cell text-xs">
                                 {movement.profiles?.full_name || movement.profiles?.email || '-'}
+                                {movement.profiles && !movement.profiles.is_active && <span className="opacity-50"> (deactivated)</span>}
                               </td>
                               <td className="hidden lg:table-cell text-xs max-w-[150px] truncate">
                                 {movement.notes || '-'}

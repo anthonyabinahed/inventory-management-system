@@ -633,7 +633,8 @@ export async function getReagentStockHistory(reagentId, { limit = 100 } = {}) {
         ),
         profiles:performed_by (
           email,
-          full_name
+          full_name,
+          is_active
         )
       `)
       .in("lot_id", lotIds)

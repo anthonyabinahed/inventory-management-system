@@ -29,7 +29,8 @@ export async function GET(request) {
     const { data: subscribers, error: subError } = await supabase
       .from("profiles")
       .select("id, email, full_name")
-      .eq("receive_email_alerts", true);
+      .eq("receive_email_alerts", true)
+      .eq("is_active", true);
 
     if (subError) throw subError;
 
