@@ -442,7 +442,7 @@ describe('reactivateUser', () => {
   it('rolls back Auth unban when DB transaction fails', async () => {
     // Create a user, deactivate, then delete their profile to force RPC failure
     const { user: targetUser } = await createTestUser({
-      email: 'rollback-unban@test.com',
+      email: 'rollback-unban1234@test.com',
       role: 'user',
     });
 
@@ -462,10 +462,15 @@ describe('reactivateUser', () => {
     // Verify compensating action: user should still be banned (re-banned after RPC failure)
     const testClient = getAnonClient();
     const { error: signInError } = await testClient.auth.signInWithPassword({
-      email: 'rollback-unban@test.com',
+      email: 'rollback-unban1234@test.com',
       password: 'TestPass123!',
     });
     expect(signInError).not.toBeNull();
+
+    // Clean up the orphaned auth user (profile was deleted above, so
+    // deleteUserByEmail won't find it — delete directly by ID)
+    await admin.auth.admin.updateUserById(targetUser.id, { ban_duration: 'none' });
+    await admin.auth.admin.deleteUser(targetUser.id);
   });
 
   it('does not re-enable email alerts on reactivation', async () => {
